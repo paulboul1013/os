@@ -1,4 +1,4 @@
-#os
+# os
 
 # bootsector
 
@@ -57,8 +57,9 @@ qemu-system-x86_64  boot_sect_hello.bin
 
 learn where the boot sector is stored
 
-直接說bios一定都放在0x7c00位置上
-來源參考這https://gist.github.com/letoh/2790559  
+直接說bios一定都放在0x7c00位置上  
+說法來源參考  
+https://gist.github.com/letoh/2790559  
 https://zhuanlan.zhihu.com/p/655209631  
 
 將x顯在螢幕上，嘗試4種不同的方法實現
@@ -115,7 +116,7 @@ nasm -f bin boot_sect_memory.asm -o boot_sect_memory.bin -l boot_sect_memory.lst
 從列表文件中可以看到：
 - `jmp $` 指令在 0x0000002B 位置（2 bytes: EBFE）
 - `the_secret:` 標籤緊接在後面，位於 **0x0000002D** 位置
-- "X" 字元（0x58）就存儲在這個位置
+- `X` 字元（0x58）就存儲在這個位置
 
 所以位移量 0x2d 是從 boot sector 開始（0x0000）到 `the_secret` 標籤的距離，也就是所有前面的指令代碼（包括 4 種打印方法的代碼和 `jmp $` 指令）的總長度。
 
@@ -151,6 +152,6 @@ qemu-system-x86_64  boot_sect_stack.bin
 
 ## bootsector-functions-strings
 
-這節要學習是寫一些control structures，functional calling，full strings usage
+這節要學習寫control structures，functional calling，full strings usage
 
 作為在準備進入disk和kernel的前置概念
