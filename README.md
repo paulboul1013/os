@@ -155,3 +155,78 @@ qemu-system-x86_64  boot_sect_stack.bin
 這節要學習寫control structures，functional calling，full strings usage
 
 作為在準備進入disk和kernel的前置概念
+
+### Strings
+定義string就像一長串的characters集合，後面在加一個null byte來當字串結尾
+```c
+mystring:
+    db 'Hello,World',0
+```
+
+### Control structures
+到目前的程式有使用'jmp $'當作無限迴圈  
+
+assembler跳到之前的指令結果
+範例:
+```c
+cmp ax,4 ; if ax=4
+je ax_is_four ; do something when ax result equal to 4
+jmp else ;else do another thing
+jmp endif ; finally ,resume the normal flow
+
+ax_is_four:
+    .....
+    jmp endif
+
+else:
+    .....
+    jmp endif ;為了完整性這邊也跳到endif，其實`else:`執行完，就會往下執行
+
+endif:
+
+```
+
+### Calling functions
+
+calling a function is just a jump to a label 
+呼叫函式就像跳到label一樣 
+
+有兩個步驟傳入參數
+
+1. the programmer knows theys share a specific register or memory address
+2. write a bit more code and make function calls generic and without side effects
+
+第一步，使用al(actually ax)作為傳入參數
+
+```c
+mov al,'X'
+jmp print
+endprint:
+
+...
+
+print:
+    mov ah,0x0e ; tty mode
+    int 0x10 ;assume the 'al' already has the character
+    jmp endprint
+
+```
+
+可以看到這方法很容意變成雜亂的程式碼，現在的print函式只有返回endprint，如果是其他函式想要呼叫，將會浪費程式碼資源  
+
+正確的解法是提供兩個改進點  
+
+- 儲存返回位址  
+- 儲存現在的register，這樣在函式中修改，不會修改到原本的register的數值  
+
+為了可以儲存return address，cpu將會幫忙取代`jmp`去呼叫函式，使用`call`和`ret`  
+
+為了儲存register data，也有stack特殊指令，`pusha`和`popa`，可以把全部register的數值自動保存和恢復  
+
+###  include external files
+
+依照功能分開程式碼，並且印入到main檔，可以增加可讀性
+
+```c
+%include "file.asm"
+```
