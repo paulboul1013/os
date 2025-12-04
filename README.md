@@ -230,3 +230,86 @@ print:
 ```c
 %include "file.asm"
 ```
+
+編譯指令
+```c
+nasm -f bin boot_sect_main.asm  -o boot_sect_main.bin
+```
+不用把boot_sect_print.asm給一起編譯進去
+
+執行
+```
+qemu-system-x86_64 boot_sect_main.bin 
+```
+
+### print hex values
+
+下個目標是要讀取磁碟，所以需要一些方法確保讀取到正確資料，查看`boot_sect_print_hex.asm`
+
+## bootsector-segmentation
+
+learn how to address memory with 16-bit real mode segmentation
+
+did segmentation with [org] before
+
+Segmentation means that you can specify an offset to all the data you refer to
+
+use `cs`,`ds`,`ss`,`es` for code,data,stack ,extra
+
+warning:these register are  implicitly used by the CPU ，then all your memory access will be offset by `ds`
+
+compute real address formula `segment<<4+address`，for example,`ds` is `0x4d` , then `[0x20]` actully refers to `0x4d+0x20=0x4f0`
+
+note:can't use `mov` literals to those registers,have to use a gernel purpose register before
+
+編譯指令
+```c
+nasm -f bin boot_sect_segmentation.asm  -o boot_sect_segmentation.bin
+```
+
+執行指令
+```c
+qemu-system-x86_64 boot_sect_segmentation.bin
+```
+
+## bootsector-disk
+
+let the bootsector load data from disk in order to boot the kernel
+
+OS can't fit inside the bootsector 512 bytes,need to read data from  a disk to run kernel
+
+Don't need deal with the disk spinning platters on and off
+
+can just call bios routines,To do that, set `al` to `0x02` (other reg with required cylinder ,head and sector ) and raise int 0x13
+
+more int 13h detail https://stanislavs.org/helppc/int_13-2.html  
+
+this time will use the carry bit,which is an extra bit present on each register stores when an operation has overflow status 
+
+```c
+mov ax, 0xFFFF
+add ax, 1 ; ax = 0x0000 and carry = 1
+```
+
+carry bit isn't accessed but used as a control bit by other operators ,like `jc` (jump if the carry bit is set)
+
+bios set `al` the number of sectors read,always compare it to the expected number
+
+編譯指令
+```c
+nasm -f bin boot_sect_disk_main.asm  -o boot_sect_disk_main.bin
+```
+
+執行
+```c
+qemu-system-x86_64 boot_sect_disk_main.bin  //自動是視為軟盤
+qemu-system-x86_64  -fda boot_sect_disk_main.bin //直接用floopy disk開啟
+```
+
+
+## 32-bit print
+
+print on the screen when on 32-bit protected mode
+
+32-bit mode can use 32 bit register and memory addressing，protected memory ,virtual memory。but will lose bios interrupts and need to code the GDT
+
