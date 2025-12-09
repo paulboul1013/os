@@ -1,39 +1,66 @@
-gdt_start: ;don't remove the labels ,all needed to compute sizes and jumps 
-    ; the GDT starts with a null 8 byte
-    dd 0x0 ;4 byte
-    dd 0x0
+gdt_start:    ; Do not remove these labels — required to compute sizes and addresses
+
+    ; Null descriptor (mandatory first GDT entry, 8 bytes)
+    dd 0x00000000         ; First 4 bytes
+    dd 0x00000000         ; Next 4 bytes
 
 
-; GDT for code segment. base = 0x00000000, length = 0xfffff
-; for flags, refer to os-dev.pdf document, page 36
+; ------------------------------------------------------------------------------------
+; Code Segment Descriptor
+; Base  = 0x00000000
+; Limit = 0x000FFFFF (with 4KB granularity)
+; Flags follow Intel SDM descriptor format
+; ------------------------------------------------------------------------------------
 gdt_code:
-    dw 0xffff    ; segment limit, bits 0-15
-    dw 0x0       ; segment base, bits 0-15
-    db 0x0       ; segment base, bits 16-23
-    db 10011010b ; flags (8 bits) Type=0xA ,S=1,DPL=0,P=1
-    db 11001111b ; flags (4 bits) + segment length, bits 16-19， G=1, D=1, L=0, AVL=0, Limit19:16=0xF
-    db 0x0       ; segment base, bits 24-31
+    dw 0xFFFF             ; Segment limit 0–15
+    dw 0x0000             ; Base address 0–15
+    db 0x00               ; Base address 16–23
+    db 10011010b          ; Access byte:
+                          ;   Type = 0xA (Execute/Read Code Segment)
+                          ;   S = 1 (Descriptor type = code/data)
+                          ;   DPL = 0 (Privilege level 0)
+                          ;   P = 1 (Segment present)
+    db 11001111b          ; Flags and limit:
+                          ;   G = 1 (4KB granularity)
+                          ;   D = 1 (32-bit segment)
+                          ;   L = 0 (Not 64-bit code)
+                          ;   AVL = 0 (Available for software)
+                          ;   Limit 19–16 = 0xF
+    db 0x00               ; Base address 24–31
 
-; GDT for data segment. base and length identical to code segment
-; some flags changed, again, refer to os-dev.pdf
+
+; ------------------------------------------------------------------------------------
+; Data Segment Descriptor
+; Same base and limit as code segment
+; Type differs (Read/Write data segment)
+; ------------------------------------------------------------------------------------
 gdt_data:
-    dw 0xffff ;limit
-    dw 0x0 ;base
-    db 0x0
-    db 10010010b ;Type=0x2
-    db 11001111b
-    db 0x0
+    dw 0xFFFF             ; Segment limit 0–15
+    dw 0x0000             ; Base address 0–15
+    db 0x00               ; Base address 16–23
+    db 10010010b          ; Access byte:
+                          ;   Type = 0x2 (Read/Write Data Segment)
+                          ;   S = 1 (Code/Data descriptor)
+                          ;   DPL = 0
+                          ;   P = 1
+    db 11001111b          ; Same flags and limit as code segment
+    db 0x00               ; Base address 24–31
 
 
 gdt_end:
-    
 
-;GDT descriptor
+
+; ------------------------------------------------------------------------------------
+; GDT Descriptor
+; ------------------------------------------------------------------------------------
 gdt_descriptor:
-    dw gdt_end-gdt_start -1 ; size (16 bit), always one less of its true size
-    dd gdt_start ; address(32 bit)
+    dw gdt_end - gdt_start - 1   ; GDT size (limit field = size − 1)
+    dd gdt_start                 ; Linear base address of the GDT
 
 
-;define some constants for later use
+; ------------------------------------------------------------------------------------
+; Offsets (selectors) for use in protected mode
+; These are byte offsets from gdt_start to each descriptor
+; ------------------------------------------------------------------------------------
 CODE_SEG equ gdt_code - gdt_start
 DATA_SEG equ gdt_data - gdt_start
