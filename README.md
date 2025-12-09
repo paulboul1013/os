@@ -324,3 +324,20 @@ the formula for access a specific character on the 80x25 gird:
 
 Every character use 2 bytes(one for ascii,the other is for color)
 
+## 32bit-gdt
+
+The segment operation way is left shifted to address an extrax level of indirection
+
+In 32-bit mode ，segmenation work differently，the offset is an index to a segment descriptor `(SD)` in the GDT。this descriptor define the base address(32-bits),the size(20-bits) and some flags  
+
+like readonly，permissions,etc
+
+easy way to program the GDT is to define two segments,one for code and another for data,these can overlap which means there is no memory protection,but it's enough to boot
+
+the first GDT entry must be 0x00 to make sure that the programer didn't make mistake managing address
+
+The cpu can't  directly load the GDT address，it requires a meta structure called the `GDT descriptor` with the size(16b) and address (32b)of our actual GDT. it's loaded with the `lgdt` operation.
+
+## refernce os-dev.pdf check segement flags
+
+
