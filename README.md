@@ -338,6 +338,31 @@ the first GDT entry must be 0x00 to make sure that the programer didn't make mis
 
 The cpu can't  directly load the GDT address，it requires a meta structure called the `GDT descriptor` with the size(16b) and address (32b)of our actual GDT. it's loaded with the `lgdt` operation.
 
-## refernce os-dev.pdf check segement flags
+note:refernce os-dev.pdf check segement flags
 
+## 32bit-enter
 
+Enter 32-bit protected mode and test our code from previous code
+
+To jump into 32-bit mode steps:
+1. disable interrupts
+2. laod the GDT
+3. set a bit on the cpu control register `cr0`
+4. Flush the CPU pipeline by issuing a carefully crafted far jump
+5. Update all the segment registers
+6. Update the stack
+7. Call to a well-known label which contains the first usefull code in 32 bits
+
+build the prcoess on the file `32bit-switch.asm`
+
+after entering 32-bit mode,will call `BEGIN_PM` which is the entry point for actual useful code，can watch `32bit-main.asm`。
+
+compile instruction
+```c
+nasm -f bin 32bit-main.asm  -o 32bit-main.bin
+```
+
+usage
+```c
+qemu-system-x86_64 32bit-main.bin
+```
