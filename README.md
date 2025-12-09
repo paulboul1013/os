@@ -313,3 +313,14 @@ print on the screen when on 32-bit protected mode
 
 32-bit mode can use 32 bit register and memory addressing，protected memory ,virtual memory。but will lose bios interrupts and need to code the GDT
 
+write print string loop which work in 32-bit mode，don't need bios interrupt  
+
+Directly operate VGA video memory install of calling `int 0x10` 
+
+the VGA memory at address `0xb8000` and has text mode to avoid operate directly pixels  
+
+the formula for access a specific character on the 80x25 gird:  
+`0xb8000`+2*(row*80+col)
+
+Every character use 2 bytes(one for ascii,the other is for color)
+
