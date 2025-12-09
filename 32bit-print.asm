@@ -7,7 +7,7 @@ WHITE_ON_BLACK equ 0x0f ; the color byte for each character
 
 print_string_pm:
     pusha
-    mov eax, VIDEO_MEMORY
+    mov edx, VIDEO_MEMORY
 
 
 print_string_pm_loop:
