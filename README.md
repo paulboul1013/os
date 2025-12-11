@@ -428,7 +428,7 @@ should have all the GNU binutils and the compiler at `/usr/local/i386elfgcc/bin`
 
 learn to write the low-level code as we did with assembler, but in C
 
-## Compile
+### Compile
 
 see how the C compiler our code and compare it to the machine code generated with the assembler
 
