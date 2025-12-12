@@ -553,3 +553,70 @@ Where is the ASCII `0x48656c6c6f` for "Hello"?
 
 
 ## kernel-barebones
+
+create a simple kernel and a bootsector capable of booting it
+
+### kernel
+this time implement C kernel just print an `X`on the top left  corner of the screen
+
+notice the dummy function that does nothing。That function will force us to create a kernel entry routinue which does not point to byte 0x0 in our kernel，but to an actual label which we know that launches it，the case is `main()`
+
+compile instruction
+```c
+/usr/local/i386elfgcc/bin/i386-elf-gcc -ffreestanding -c kernel.c -o kernel.o
+```
+
+the routine code is `kernel_entry.asm`。will learn how to use `[extern]`  declarations in assebly。to compile this file in stread of generate a binary，will generate an `elf` format which will be linked with `kernel.o`
+
+compile instruction
+```c
+nasm kernel_entry.asm -f elf -o kernel_entry.o
+```
+
+### the linker
+
+linker is usefull tool
+
+to link both object files into a single binary kernel and resolve label references
+
+the kernel will be placed  not at `0x0` in memory，but at `0x1000`.the bootsector need to know this address too
+
+compile instruction
+```c
+/usr/local/i386elfgcc/bin/i386-elf-ld -o kernel.bin -Ttext 0x1000 kernel_entry.o kernel.o --oformat binary
+```
+
+### the bootsector
+`bootsector.asm` and examine the code
+
+compile instruction
+```c
+nasm bootsect.asm -f bin -o bootsect.bin
+```
+
+
+### putting it all together
+have tow separate files for the bootsector and the kernel
+
+use link into a single file
+
+concatenate instruction
+```c
+cat bootsect.bin kernel.bin > os-image.bin
+```
+
+### run os-image.bin
+
+if have a disk laod errors that you may need to add qemu floppy parameters(floppy = `0x0`, hdd = `0x80`)
+```c
+qemu-system-i386 -fda os-image.bin  //from floopy 
+```
+
+can't use `qemu-system-i386 -hda os-image.bin` to start os from hard disk，because the os-image.bin is too small
+
+
+will see four messages:
+- "Started in 16-bit Real Mode"
+- "Loading kernel into memory"
+- (Top left) "Landed in 32-bit Protected Mode"
+- (Top left, overwriting previous message) "X"
