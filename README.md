@@ -552,4 +552,4 @@ Where is the ASCII `0x48656c6c6f` for "Hello"?
 反組譯器很盡責地把「Hello」這幾個字翻譯成了「將暫存器減一」、「輸入字串」等毫無邏輯的 CPU 指令。這證明了馮·諾伊曼架構 (Von Neumann architecture) 的一個核心特性：記憶體中的資料和指令沒有區別，全看 CPU（或反組譯器）如何解讀它。
 
 
-
+## kernel-barebones
