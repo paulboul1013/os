@@ -2,32 +2,62 @@
 # $<=first dependency
 # $^=all dependencies
 
-all: run
+# 搜尋所有的 C 原始碼檔案
+C_SOURCES = $(wildcard kernel/*.c drivers/*.c)
+# 搜尋所有的標頭檔
+HEADERS = $(wildcard kernel/*.h drivers/*.h)
 
-kernel.bin: kernel.o kernel_entry.o
-	i386-elf-ld -o $@ -Ttext 0x1000 $^ --oformat binary
+# 定義目標物件檔案列表
+OBJS = ${C_SOURCES:.c=.o}
 
-kernel_entry.o : kernel_entry.asm
-	nasm $< -f elf -o $@
+# 指定編譯器與連結器路徑
+CC= /usr/local/i386elfgcc/bin/i386-elf-gcc
+LD= /usr/local/i386elfgcc/bin/i386-elf-ld
+GDB = /usr/bin/gdb
 
-kernel.o : kernel.c
-	i386-elf-gcc -ffreestanding -c $< -o $@
-
-
-# rule of disassemble the kernel， usefule to debug
-kernel.dis : kernel.bin
-	ndisasm -b 32 $< > $@
-
-bootsect.bin: bootsect.asm
-	nasm $< -f bin -o $@
+# 編譯選項 (-g 為除錯資訊)
+CFLAGS = -g
 
 
-os-image.bin: bootsect.bin kernel.bin
+# 組合開機磁區與核心，製作作業系統映像檔
+os-image.bin: boot/bootsect.bin kernel.bin
 	cat $^ > $@
 
-run:os-image.bin
-	qemu-system-i386 -fda $<
+
+# 連結核心物件檔案，生成純二進制核心
+kernel.bin: boot/kernel_entry.o ${OBJS}
+	${LD} -o $@ -Ttext 0x1000 $^ --oformat binary
 
 
+# 生成帶有符號表的 ELF 核心檔案，用於除錯
+kernel.elf: boot/kernel_entry.o ${OBJS}
+	${LD} -o $@ -Ttext 0x1000 $^ 
+
+
+# 執行 QEMU 模擬器
+run: os-image.bin
+	qemu-system-i386 -fda os-image.bin
+
+
+# 啟動 QEMU 並連接 GDB 進行除錯
+debug : os-image.bin kernel.elf
+	qemu-system-i386 -s -fda os-image.bin &
+	${GDB} -ex "target remote localhost:1234" -ex "symbol-file kernel.elf"
+
+# 編譯 C 程式碼為物件檔案
+%.o: %.c ${HEADERS}
+	${CC} ${CFLAGS} -ffreestanding -c $< -o $@
+
+# 編譯組合語言為 ELF 格式物件檔案
+%.o : %.asm
+	nasm $< -f elf -o $@
+
+# 編譯組合語言為純二進制檔案
+%.bin: %.asm
+	nasm $< -f bin -I boot/ -o $@
+
+
+# 清除所有產生的檔案
 clean:
-	rm -rf *.o *.bin
+	rm -rf *.bin *.dis *.o os-image.bin *.elf
+	rm -rf kernel/*.o boot/*.bin drivers/*.o boot/*.o
