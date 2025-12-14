@@ -620,3 +620,35 @@ will see four messages:
 - "Loading kernel into memory"
 - (Top left) "Landed in 32-bit Protected Mode"
 - (Top left, overwriting previous message) "X"
+
+
+## check_point
+
+learn how to debug the kernel with gdb
+
+have already run own kernel，but it very little，just print 'X'
+
+install gdb used to debug
+```c
+which gdb
+/usr/bin/gdb
+```
+
+let gdb position setting variable
+Makefile:
+```c
+GDB = /usr/bin/gdb
+```
+
+use `make debug`。use build `kernel.elf` ，which is an object file(not binary) with all the symbols generated on the kernel，must be add `-g` flag，check it with `xxd` and will see some strings。but acually correct way to examine the strings in an object file is `strings kernel.elf`
+
+qemu can co-work with gdb，use `make debug`
+
+1. set breakpoint in `kernel.c:main()`:`b main`
+2. run the os:`continue`
+3. run two steps，`next` and the other `next`。will see the command set `X`，but not yet show character on the screen
+4. see what's in the video memory: `print *video_memor`，there is the "L" from "Landed in 32-bit Protected Mode"
+5. make sure that `video_memory` points to the correct address: `print video_memory`
+6. `next` to show `X`
+7. make sure `print video_memory` and look at the qemu screen
+
