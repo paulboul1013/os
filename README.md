@@ -652,3 +652,15 @@ qemu can co-work with gdb，use `make debug`
 6. `next` to show `X`
 7. make sure `print video_memory` and look at the qemu screen
 
+## video-ports
+
+learn how to use the VGA card data ports
+
+examine the I/O ports which map the screen cursor position
+
+will query port `0x3d4` with value `14` to rquest the cursor position high byte and the same port with `15` for the low byte
+
+use gdb to check because still can't print variables on the screen，set a breakpoint for a specific line。
+
+breakpoint kernel.c:21 and use the print command to check variables 
+
