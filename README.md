@@ -664,3 +664,41 @@ use gdb to check because still can't print variables on the screen，set a break
 
 breakpoint kernel.c:21 and use the print command to check variables 
 
+## video-driver
+
+write strings on the screen
+
+can able to output text on the screen
+
+see `drivers/screen.h` and will  see have defined some constants for the VGA card driver and three functions，one to clear and another couple to write strings，last is the famously named `kprint` for kernel print
+
+also see  `drivers/screen.c` ，it's implemenation of the `drivers/screen.h`
+
+there are two I/O port access routinues that，`get` and `set_cursor_offset()`
+
+directory mainipulates the video memory，`print_char()`
+
+### kprint_at
+
+`kprint_at` may be called with a `-1` value for `col` or `row`，which indicates what will print the string at the current cursor posistion
+
+sets three variables for the `col/row` and `offset`.it iterates through the `char*` and calls `print_char()` with the current coordinates
+
+the `print_char` returns the offset of the next cursor position and reuse it for the next loop 
+
+`kprint` is basically a wrapper for `kprint_at`
+
+
+### print_char
+
+like `kprint_at`，`print_char` allows cols/rows to be `-1 `，get the cursor position from the hardware，using the `ports.c` 
+
+`print_char` also handles newlines。will reset the cursor offset to column 0 of the next row
+
+the VGA cells take `two` bytes，one for character and another one for the color background
+
+### kernel.c
+
+new kernel is able to print strings
+
+have correct character positioning，spanning throug multiple lines，line break。If it tires to write outside of the screen range? it will solve next section
