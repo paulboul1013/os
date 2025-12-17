@@ -702,3 +702,18 @@ the VGA cells take `two` bytes，one for character and another one for the color
 new kernel is able to print strings
 
 have correct character positioning，spanning throug multiple lines，line break。If it tires to write outside of the screen range? it will solve next section
+
+## viedo-scroll
+
+scroll the screen when the text reaches the bottom
+
+see `drivers/screen.c` and note that at the bottom of `print_char` there is a new section (line 84) which checks if the current offset is over the screen size and scrolls the text
+
+scrolling is handled by `memory_copy`，it's simple version of standard `memcpy` but needed named it different name to avoid collsions。see `kernel/util.c` for implementation
+
+To help visualize scrolling，also implement a function to convert integers to text，`int_to_ascii`。this is a quick implementation of the standard function `itoa`。
+
+notice that for integers which have double digits or more，they are printed in reverse
+
+can set a breakpooint  on line 14 on the `kernel.c`
+
