@@ -3,12 +3,12 @@
 # $^=all dependencies
 
 # 搜尋所有的 C 原始碼檔案
-C_SOURCES = $(wildcard kernel/*.c drivers/*.c)
+C_SOURCES = $(wildcard kernel/*.c drivers/*.c cpu/*.c)
 # 搜尋所有的標頭檔
-HEADERS = $(wildcard kernel/*.h drivers/*.h)
+HEADERS = $(wildcard kernel/*.h drivers/*.h cpu/*.h)
 
 # 定義目標物件檔案列表
-OBJS = ${C_SOURCES:.c=.o}
+OBJS = ${C_SOURCES:.c=.o} cpu/interrupt.o
 
 # 指定編譯器與連結器路徑
 CC= /usr/local/i386elfgcc/bin/i386-elf-gcc
@@ -60,4 +60,4 @@ debug : os-image.bin kernel.elf
 # 清除所有產生的檔案
 clean:
 	rm -rf *.bin *.dis *.o os-image.bin *.elf
-	rm -rf kernel/*.o boot/*.bin drivers/*.o boot/*.o
+	rm -rf kernel/*.o boot/*.bin drivers/*.o boot/*.o cpu/*.o
