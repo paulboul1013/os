@@ -717,3 +717,46 @@ notice that for integers which have double digits or more，they are printed in 
 
 can set a breakpooint  on line 14 on the `kernel.c`
 
+
+
+## interrupts
+
+set up the interrupt descriptor table to handle cpu interrupts
+
+### data types
+define some specila data types  in `cpu/types.h`，help uncouple data structures for raw bytes from chars and ints，must bee carefully placed on the `cpu/`，will put machine-dependent code now on。the boot code is specifically x86 and is still on `boot/`，but can leave alone for now
+
+some existing files have been  modidfied to use the new `u8`,`u16`,`u32` data types
+
+### interrupts 
+
+interrupts is one of the main point that a kernel need to handle。as soon as possble , to be able to receive keyboard。
+
+another examples of interrupts are: division by zero,out of bounds,invalid opcodes ,page faults ,etc
+
+interrupts are handled on a vector,with entries which are similar to those of the GDT ，but have other name is IDT，do it with c
+
+`cpu/idt.h` defines how an idt entry is stored `idt_gate` (there are need to be 256 of them ，if NULL，or the cpu may panic ) and the actual idt structure that the bios will load,`idt_register` which is just a memory address and size，similar to the GDT register
+
+define a couple variables to access those data structures from assebler code
+
+`cpu/idt.c` fills in every struct with a handler。can see matter of setting the struct values and calling `lidt` assembler command
+
+### ISRs
+the interrupt service routines run every time the cpu detects an interrupt which is usually fatal
+
+will write just enough code to handle，print an error message and halt the cpu
+
+on `cpu/isr.h`，define 32 of them，they are declared as `extern` because they will be implemented in assembler，in `cpu/interrupt.asm`
+
+
+before jumping to the assembler code，check `cpu/isr.c`。can see define a function to install all isrs at once and load the idt， a list of error messages，and the high level handle which kprints some information，can customize `isr_handler` to print/do whatever you want
+
+now to the low level which glues every `idt_gate` with its low-level and high-level handler。open `cpu/interrupt.asm`。define a common low level ISR code which basically saves/restores the state and calls the C code and then the actual ISR assembler functions which are refernced on `cpu/isr.h`
+
+>the `registers_t` struct is a representation of all the registers pushed in `interrupt.asm`
+
+now need to reference `cpu/interrupt.asm` from out Makefile and make the kernel install the ISRs and lauch one of them
+
+notice the cpu doesn't halt after some interrupts
+ 
