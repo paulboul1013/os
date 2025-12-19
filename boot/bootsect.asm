@@ -28,7 +28,7 @@ load_kernel:
     call print_nl
 
     mov bx,KERNEL_OFFSET ; read from disk and store in 0x1000
-    mov dh ,16 ; dh is for read 16 sectors。our future kernel will be larger，make it bigger
+    mov dh ,31 ; dh is for read 16 sectors。our future kernel will be larger，make it bigger
     mov dl,[BOOT_DRIVE]
     call disk_load
     ret
@@ -45,6 +45,7 @@ BOOT_DRIVE db 0;
 MSG_REAL_MODE db "Started in 16-bit Real Mode" , 0
 MSG_PROT_MODE db "Landed in 32-bit Protected Mode" ,0
 MSG_LOAD_KERNEL db "Loading kernel into memory" ,0
+MSG_RETURN_KERNEL db "Return from kernel. Error?" ,0
 
 ;padding
 times 510-($-$$) db 0
