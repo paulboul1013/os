@@ -1,6 +1,6 @@
 # os
 
-# bootsector
+## bootsector
 
 當電腦開啟時，bios不知道如何載入os，這是boot sector的任務，boot sector一定要放在標準位置，位置在第一個磁碟的磁區(cylinder 0, head 0, sector 0)，整個boot sector有512bytes大  
 
@@ -760,3 +760,27 @@ now need to reference `cpu/interrupt.asm` from out Makefile and make the kernel 
 
 notice the cpu doesn't halt after some interrupts
  
+## interrupts-irqs
+
+finish the interrupts implemenataion and cpu timer
+
+when the cpu boots,the pic maps IRQs 0-7 to INT 0x8-0xF and IRQs 8-15 to  INT 0x70-0x77
+
+sinece programmed ISRs 0-31,it's standard to remap IRQs to ISRs 32-47
+
+the PICs are communicated with via I/O ports，the master pic has command 0x20 and data 0x21，while the slave has command 0XA0 and data0XA1
+
+code for remapping the PICs is weired and includes some masks，check https://wiki.osdev.org/8259_PIC，otherwise look `cpu/isr.c` ，new code after we set the IDT gates for the ISRs ，after that，add the IDT gates for IRQs
+
+jump to assembler，at `interrupt.asm`，the first task is to add global definitions for the IRQ symbols just used in the C code，look at the end of the `global` statements
+
+The add the IRQ handlers，same `interrupt.asm` at the bottom，notice how to jumpy to a new common stub:`irq_common_stub`
+
+and then create this `irq_common_stub` which is very similar to the ISR one。It is located at the top of `interrupt.asm` andit also defines a new `[extern irq_handler]`
+
+back to c code，to write the `irq_handler()` in `isr.c`，it sent some EOIs to the PICs and calls the handler which is stored in an arary named `interrupt_handlers` and defined at the top of the file。The new structs are defined in `isr.h`，also use a simple function to register the interrupt handlers
+
+we can define our first IRQ handler
+
+no changes in `kernel.c` this time
+
