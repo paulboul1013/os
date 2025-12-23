@@ -784,3 +784,33 @@ we can define our first IRQ handler
 
 no changes in `kernel.c` this time
 
+## interrupts-timer
+
+concept:
+1. cpu timer:is master board or internal cpu 's hard component，it make a signal with same frequency
+
+2.keyboard interrupts:interrupt is hardware tells cpu that it's emergcy situation，stop the task right now，deal another task first。
+
+3. scancode is the keyboard hardware sent to computer the raw data
+
+implement  first IRQ handlers: the cpu timer and the keyboard
+
+
+### Timer
+
+timer is easy to setting。first declare an `init_timer()` on `cpu/timer.h` and implement it on `cpu/timer.c`。a matter of computing the clock frequency and sending the bytes to the appropriate ports
+
+now fix `kernel/utils.c` int_to_ascii() to print the numbers in the correct order。need to implement `reverse()` and `strlen()`
+
+go back to the `kernel/kernel.c` and do two things。enable interrupts again and the initialize the timer interrupt 
+
+`make run` and will see the clock ticking
+
+## keyboard
+
+keyboard setting is very easy，with a drawback，The PIC does not send us the ascii code for the pressed key，but the scancode for the key-press and the key-up events，so will need to translate those
+
+check `drivers/keyboard.c` where there are two function，the callback and the initialization which setting the interrupt callback。A new `keyboard.h` created with the definitons
+
+`keyboad.c` have a long table to translate scancodes to ASCII keys。for the time being we will only implement a simple subset of the US keyboard，can read more https://aeb.win.tue.nl/linux/kbd/scancodes-1.html
+
