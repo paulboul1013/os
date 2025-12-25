@@ -3,9 +3,9 @@
 # $^=all dependencies
 
 # 搜尋所有的 C 原始碼檔案
-C_SOURCES = $(wildcard kernel/*.c drivers/*.c cpu/*.c)
+C_SOURCES = $(wildcard kernel/*.c drivers/*.c cpu/*.c lib/*.c)
 # 搜尋所有的標頭檔
-HEADERS = $(wildcard kernel/*.h drivers/*.h cpu/*.h)
+HEADERS = $(wildcard kernel/*.h drivers/*.h cpu/*.h lib/*.h)
 
 # 定義目標物件檔案列表
 OBJS = ${C_SOURCES:.c=.o} cpu/interrupt.o
@@ -16,8 +16,8 @@ LD= /usr/local/i386elfgcc/bin/i386-elf-ld
 GDB = /usr/bin/gdb
 
 # 編譯選項 (-g 為除錯資訊)
-CFLAGS = -g
-
+CFLAGS = -g -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs \
+		 -Wall -Wextra -Werror
 
 # 組合開機磁區與核心，製作作業系統映像檔
 os-image.bin: boot/bootsect.bin kernel.bin
