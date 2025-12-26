@@ -814,3 +814,42 @@ check `drivers/keyboard.c` where there are two function，the callback and the i
 
 `keyboad.c` have a long table to translate scancodes to ASCII keys。for the time being we will only implement a simple subset of the US keyboard，can read more https://aeb.win.tue.nl/linux/kbd/scancodes-1.html
 
+## shell
+
+clean the code and parse user input
+
+first clean up the code a bit，try to put things in the most predictable places，it's good exeercise to know when the code is growing  and adapit it to current and furture needs
+
+### code cleaning
+
+will quickly start to need more utility functions for handling strings and others，in a normal os，it's called c library or libc。
+
+now have a `utils.c` which will split into `mem.c` and `string.c`，whih their respective headers
+
+second，will create a new function `irq_install()` that the kernel only needs to perform one call t oinitilize all the IRQs，that function is `isr_install()` and placed on the `isr.c` ，here will disable the `kprint()` on `timer_callback()`  to avoid filling the screen wiht message，now we know that it works
+
+there is not a clear distinction between `cpu/` and `drivers/`，will distinct later，The only change will do for now is to move `drivers/ports.*` into `cpu/` since it's clearly cpu-dependent code。`boot/` is also cpu-dependent code，but we will not mess with it until we implement the boot sequence for a different machine。
+
+there are more sswitches for the `CFLAGS` on the `Makefile`，because will now start creating higher-level functions for our C library and don't want the compiler to include any external code if we make a mistake with a declaration 。also added some flags to turn warnings into errors，since an apparently minor mistake converting pointers can blow up lateron。this also forced us to modify some misc point declarations in our code
+
+finall，will add a marco to avoid warning-errors on unused parameters on `libc/function.h`
+
+### keyboard characters
+
+how to access the typed characters
+
+when a key is pressed，the callback gets the ASCII code via a new arrays which are definied at the beginnig of `keyboard.c`
+
+the callback then appends that character to buffer，`key_buffer`
+
+it's also printed on the screen
+
+when the os wants to read user input,it calls `lib/io.c:readline()`
+
+`keyboard.c` parses backspace，by removing the last element of the key buffer and deleting it from the screen by calling `screen.c:kprint_backspace()`。we neededto modify a bit `print_char()` to not advance the offset when print a backspace
+
+
+### responding to user input
+
+the keyboard callback checks for a newline，and calls the kernel，tell it the uesr have to input something，our final libc function is `strcmp()` ，compare input string ，if user input `END` ，halt the cpu
+
