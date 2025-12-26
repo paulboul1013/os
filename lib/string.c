@@ -36,7 +36,9 @@ int strlen(char s[]){
 
 void backspace(char s[]){
     int len=strlen(s);
-    s[len-1]='\0';
+    if (len > 0) {
+        s[len-1]='\0';
+    }
 }
 void append(char s[],char n){
     int len=strlen(s);
@@ -46,7 +48,7 @@ void append(char s[],char n){
 int strcmp(char s1[],char s2[]){
     int i=0;
     for(i=0;s1[i]==s2[i];i++){
-        if (s[i]=='\0') return 0;
+        if (s1[i]=='\0') return 0;
     }
     return s1[i]-s2[i];
 }
