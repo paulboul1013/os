@@ -39,8 +39,10 @@ void kprint(char *message){
     kprint_at(message,-1,-1);
 }
 
-void kprint_backspace() {
-    int offset=get_cursor_offset()-2;
+void kprint_backspace(int min_offset) {
+    int offset=get_cursor_offset();
+    if (offset <= min_offset) return; //can't backspace past the input line start
+    offset-=2;
     int row=get_offset_row(offset);
     int col=get_offset_col(offset);
     print_char(0x08,col,row,WHITE_ON_BLACK);
@@ -80,6 +82,11 @@ int print_char(char c,int col,int row,char attr){
     if (c=='\n'){ //handle newline
         row=get_offset_row(offset);
         offset=get_offset(0,row+1);
+    }else if (c==0x08){ //handle backspace
+       
+        vidmem[offset]=' ';
+        vidmem[offset+1]=attr;
+        //don't advance offset, it's already been decremented in kprint_backspace()
     }else{ //print the character
         vidmem[offset]=c;
         vidmem[offset+1]=attr;
@@ -90,13 +97,13 @@ int print_char(char c,int col,int row,char attr){
     if (offset>=MAX_COLS*MAX_ROWS*2){
         int i;
         for(i=1;i<MAX_ROWS;i++){
-            memory_copy((char*)get_offset(0,i)+VIDEO_ADDRESS,(char*)get_offset(0,i-1)+VIDEO_ADDRESS,MAX_COLS*2);
+            memory_copy((u8*)get_offset(0,i)+VIDEO_ADDRESS,(u8*)get_offset(0,i-1)+VIDEO_ADDRESS,MAX_COLS*2);
         }
 
         //blank last line
-        char *last_line=(char*)get_offset(0,MAX_ROWS-1)+VIDEO_ADDRESS;
+        char *last_line=(char*)(get_offset(0,MAX_ROWS-1)+(u8*)VIDEO_ADDRESS);
         for(i=0;i<MAX_COLS*2;i++) {
-            last_line[i]='\0';
+            last_line[i]=0;
         }
 
         offset-=2*MAX_COLS;
