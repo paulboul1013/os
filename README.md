@@ -844,7 +844,7 @@ the callback then appends that character to buffer，`key_buffer`
 
 it's also printed on the screen
 
-when the os wants to read user input,it calls `lib/io.c:readline()`
+when the os wants to read user input,it calls `libc/io.c:readline()`
 
 `keyboard.c` parses backspace，by removing the last element of the key buffer and deleting it from the screen by calling `screen.c:kprint_backspace()`。we neededto modify a bit `print_char()` to not advance the offset when print a backspace
 
@@ -852,4 +852,19 @@ when the os wants to read user input,it calls `lib/io.c:readline()`
 ### responding to user input
 
 the keyboard callback checks for a newline，and calls the kernel，tell it the uesr have to input something，our final libc function is `strcmp()` ，compare input string ，if user input `END` ，halt the cpu
+
+## malloc
+
+implement a memory allocator
+
+add kernel memory allocatro `libc/mem.c` implement as a simple pointer to free memory which keeps growing
+
+The `kmalloc()` function can be used to request an aligned page and it also  return the real physical address for later use
+
+change the `kernel.c` leaving all the shell code，just try out the `kmalloc()` and check out first page starts at 0x10000 (as hardcoded on `mem.c`) and subsequent `kmalloc()`'s produce a new address which is aligned 4096 bytes or 0x10000 from the previous one
+
+note added a new strings.c:`hex_to_ascii()` for  printing fo hex numbers
+
+simple revise rename `types.h` to `type.h` for language  consistency
+
 
