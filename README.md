@@ -309,20 +309,20 @@ qemu-system-x86_64  -fda boot_sect_disk_main.bin //直接用floopy disk開啟
 
 ## 32-bit print
 
-print on the screen when on 32-bit protected mode
+在 32 位元保護模式下在螢幕上列印
 
-32-bit mode can use 32 bit register and memory addressing，protected memory ,virtual memory。but will lose bios interrupts and need to code the GDT
+32 位元模式可以使用 32 位元暫存器和記憶體定址、保護記憶體、虛擬記憶體，但會失去 BIOS 中斷並需要編寫 GDT
 
-write print string loop which work in 32-bit mode，don't need bios interrupt  
+編寫在 32 位元模式下運作的列印字串迴圈，不需要 BIOS 中斷
 
-Directly operate VGA video memory install of calling `int 0x10` 
+直接操作 VGA 視訊記憶體，而不是呼叫 `int 0x10`
 
-the VGA memory at address `0xb8000` and has text mode to avoid operate directly pixels  
+VGA 記憶體位於位址 `0xb8000`，具有文字模式以避免直接操作像素
 
-the formula for access a specific character on the 80x25 gird:  
-`0xb8000`+2*(row*80+col)
+存取 80x25 網格上特定字元的公式：
+`0xb8000 + 2 * (row * 80 + col)`
 
-Every character use 2 bytes(one for ascii,the other is for color)
+每個字元使用 2 字節（一個用於 ASCII，另一個用於顏色）
 
 ## 32bit-gdt
 
