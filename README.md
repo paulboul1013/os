@@ -248,19 +248,19 @@ qemu-system-x86_64 boot_sect_main.bin
 
 ## bootsector-segmentation
 
-learn how to address memory with 16-bit real mode segmentation
+學習如何使用 16 位元真實模式分段來定址記憶體
 
-did segmentation with [org] before
+之前使用 `[org]` 做過分段
 
-Segmentation means that you can specify an offset to all the data you refer to
+分段意味著您可以為所有引用的資料指定一個偏移量
 
-use `cs`,`ds`,`ss`,`es` for code,data,stack ,extra
+使用 `cs`、`ds`、`ss`、`es` 分別對應程式碼、資料、堆疊、額外段
 
-warning:these register are  implicitly used by the CPU ，then all your memory access will be offset by `ds`
+警告：這些暫存器會被 CPU 隱式使用，因此所有記憶體存取都會被 `ds` 偏移
 
-compute real address formula `segment<<4+address`，for example,`ds` is `0x4d` , then `[0x20]` actully refers to `0x4d+0x20=0x4f0`
+計算真實位址的公式為 `segment * 16 + address`（即 `segment << 4 + address`）。例如，如果 `ds` 是 `0x4d`，那麼 `[0x20]` 實際上指的是 `0x4d * 16 + 0x20 = 0x4d0 + 0x20 = 0x4f0`
 
-note:can't use `mov` literals to those registers,have to use a gernel purpose register before
+注意：不能直接使用 `mov` 將立即數值載入這些暫存器，必須先使用通用暫存器作為中介
 
 編譯指令
 ```c
