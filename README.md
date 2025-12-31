@@ -448,25 +448,26 @@ i386-elf-objdump -d function.o
 ```
 
 ## Link
-To make a binary file,use the linker,important part of is to learn how high level languages call function labels。
 
-which is the offset where our function will be placed in memory?
+要產生二進制檔案，使用連結器，重要的部分是學習高階語言如何呼叫函數標籤
 
-We don't actually know.for example,we'll place the offse at `0x0` and use the `binary` format which generates machine code without any labels and metadata
+函數在記憶體中會被放置在什麼偏移量？
+
+我們實際上不知道。例如，我們會將偏移量設為 `0x0`，並使用 `binary` 格式，該格式會產生不包含任何標籤和元資料的機器碼
 
 ```c
 i386-elf-ld -o function.bin -Ttext 0x0 --oformat binary function.o
 ```
-maybe have warning appear when linking, ignore it
+連結時可能會出現警告，可以忽略它
 
-examine both `binary` files `function.o` and `function.bin` using `xxd`
+使用 `xxd` 檢查 `function.o` 和 `function.bin` 這兩個檔案
 
-can seen the `.bin` file is machine code
+可以看到 `.bin` 檔案是純機器碼
 
-`.o` file has a lot of debugging information and labels..
+`.o` 檔案包含許多除錯資訊和標籤
 
 ## Decompile
-examine the machine code
+檢查機器碼
 ```c
 ndisasm -b 32 function.bin
 ```
