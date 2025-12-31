@@ -326,19 +326,17 @@ VGA 記憶體位於位址 `0xb8000`，具有文字模式以避免直接操作像
 
 ## 32bit-gdt
 
-The segment operation way is left shifted to address an extrax level of indirection
+分段操作方式被左移以定址額外一層的間接定址
 
-In 32-bit mode ，segmenation work differently，the offset is an index to a segment descriptor `(SD)` in the GDT。this descriptor define the base address(32-bits),the size(20-bits) and some flags  
+在 32 位元模式下，分段運作方式不同，偏移量是 GDT 中段描述符（Segment Descriptor, SD）的索引。這個描述符定義了基底位址（32 位元）、大小（20 位元）以及一些標誌，例如唯讀、權限等
 
-like readonly，permissions,etc
+編寫 GDT 的簡單方法是定義兩個段，一個用於程式碼，另一個用於資料，這些段可以重疊，這意味著沒有記憶體保護，但足以啟動系統
 
-easy way to program the GDT is to define two segments,one for code and another for data,these can overlap which means there is no memory protection,but it's enough to boot
+第一個 GDT 條目必須是空描述符（null descriptor，全為 0），以確保程式設計師不會在管理位址時犯錯
 
-the first GDT entry must be 0x00 to make sure that the programer didn't make mistake managing address
+CPU 無法直接載入 GDT 位址，它需要一個稱為「GDT 描述符」的中繼結構，包含實際 GDT 的大小（16 位元）和位址（32 位元）。它透過 `lgdt` 指令載入
 
-The cpu can't  directly load the GDT address，it requires a meta structure called the `GDT descriptor` with the size(16b) and address (32b)of our actual GDT. it's loaded with the `lgdt` operation.
-
-note:refernce os-dev.pdf check segement flags
+注意：參考 os-dev.pdf 檢查段標誌
 
 ## 32bit-enter
 
