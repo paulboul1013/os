@@ -368,24 +368,24 @@ qemu-system-x86_64 32bit-main.bin
 
 ## kernel-crosscompiler
 
-create a development environment to build your knerel
+建立開發環境以建置您的核心
 
-need a cross-compiler once jump to  developing in a higher language，it's C
+一旦跳轉到使用高階語言開發時，需要一個交叉編譯器，這裡使用 C
 
-First install the required packages 
+首先安裝所需的套件：
 - gmp
 - mpfr
 - libmpc
 - gcc
 
-will need `gcc` to build corss-compiled
+需要 `gcc` 來建置交叉編譯器
 
 ```c
 export CC=/usr/local/bin/gcc
 export LD=/usr/local/bin/gcc
 ```
 
-need to build binutils and a cross-compiled gcc,will put them into /user/local/i386elfgcc
+需要建置 binutils 和交叉編譯的 gcc，會將它們放入 `/usr/local/i386elfgcc`
 
 ```c
 export PREFIX="/usr/local/i386elfgcc"
@@ -394,7 +394,8 @@ export PATH="$PREFIX/bin:$PATH"
 ```
 
 ### binutils
-recommend copy line by line，execute with root 
+執行下面命令，但要有root權限才能執行
+>備註:建議下載更新的binutils.tar.gz，會比較好，這os還是用2.24
 ```c
 mkdir /tmp/src
 cd /tmp/src
@@ -406,7 +407,7 @@ cd binutils-build
 ```
 
 ### gcc
-the same，use root execute these command
+一樣，要有root權限才能執行
 ```c
 cd /tmp/src
 curl -O https://ftp.gnu.org/gnu/gcc/gcc-4.9.1/gcc-4.9.1.tar.bz2
@@ -420,7 +421,7 @@ make install-gcc
 make install-target-libgcc 
 ```
 
-should have all the GNU binutils and the compiler at `/usr/local/i386elfgcc/bin`
+安裝完後應該要有全部的GNU binutils和編譯器在`/usr/local/i386elfgcc/bin`
 
 ## kernel-c
 
