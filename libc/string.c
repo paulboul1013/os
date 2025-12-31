@@ -1,5 +1,5 @@
 #include "string.h"
-#include "../cpu/type.h"
+#include <stdint.h>
 
 void int_to_ascii(int n,char str[]){
     int i,sign;
@@ -23,7 +23,7 @@ void hex_to_ascii(int n,char str[]) {
     append(str,'x');
     char zeros=0;
 
-    s32 tmp;
+    int32_t tmp;
     int i;
     for (i=28;i>0;i-=4){
         tmp=(n>>i)&0xF;
@@ -50,7 +50,7 @@ void reverse(char s[]){
 
 int strlen(char s[]){
     int i=0;
-    while (s[i]!='\0') i++;
+    while (s[i]!='\0') ++i;
     return i;
 }
 
