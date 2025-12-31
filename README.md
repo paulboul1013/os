@@ -340,20 +340,20 @@ CPU 無法直接載入 GDT 位址，它需要一個稱為「GDT 描述符」的�
 
 ## 32bit-enter
 
-Enter 32-bit protected mode and test our code from previous code
+進入 32 位元保護模式並測試之前的程式碼
 
-To jump into 32-bit mode steps:
-1. disable interrupts
-2. laod the GDT
-3. set a bit on the cpu control register `cr0`
-4. Flush the CPU pipeline by issuing a carefully crafted far jump
-5. Update all the segment registers
-6. Update the stack
-7. Call to a well-known label which contains the first usefull code in 32 bits
+進入 32 位元模式的步驟：
+1. 禁用中斷
+2. 載入 GDT
+3. 設定 CPU 控制暫存器 `cr0` 中的一個位元
+4. 透過執行一個精心設計的遠跳轉來清除 CPU 管線
+5. 更新所有段暫存器(ds,ss,es,fs,gs)
+6. 更新堆疊
+7. 呼叫一個已知的標籤，該標籤包含第一個有用的 32 位元程式碼
 
-build the prcoess on the file `32bit-switch.asm`
+在檔案 `32bit-switch.asm` 中建立此流程
 
-after entering 32-bit mode,will call `BEGIN_PM` which is the entry point for actual useful code，can watch `32bit-main.asm`。
+進入 32 位元模式後，會呼叫 `BEGIN_PM`，這是實際有用程式碼的進入點，可以查看 `32bit-main.asm`
 
 compile instruction
 ```c
