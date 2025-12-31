@@ -274,26 +274,26 @@ qemu-system-x86_64 boot_sect_segmentation.bin
 
 ## bootsector-disk
 
-let the bootsector load data from disk in order to boot the kernel
+讓啟動扇區從磁碟載入資料以便啟動核心
 
-OS can't fit inside the bootsector 512 bytes,need to read data from  a disk to run kernel
+作業系統無法完全放入啟動扇區的 512 字節中，需要從磁碟讀取資料來執行核心
 
-Don't need deal with the disk spinning platters on and off
+不需要處理磁碟旋轉盤片的開關等硬體細節
 
-can just call bios routines,To do that, set `al` to `0x02` (other reg with required cylinder ,head and sector ) and raise int 0x13
+可以直接呼叫 BIOS 常式。要這樣做，將 `ah` 設為 `0x02`（讀取扇區功能），並設定其他暫存器（包含所需的磁柱、磁頭和扇區參數），然後觸發 `int 0x13`
 
-more int 13h detail https://stanislavs.org/helppc/int_13-2.html  
+更多 INT 13h 詳細資訊：https://stanislavs.org/helppc/int_13-2.html
 
-this time will use the carry bit,which is an extra bit present on each register stores when an operation has overflow status 
+這次會使用進位標誌（carry flag），它是 EFLAGS 暫存器中的一個標誌位，當運算發生進位或借位時會被設定
 
 ```c
 mov ax, 0xFFFF
 add ax, 1 ; ax = 0x0000 and carry = 1
 ```
 
-carry bit isn't accessed but used as a control bit by other operators ,like `jc` (jump if the carry bit is set)
+進位標誌不能直接存取，但會被其他指令作為控制位元使用，例如 `jc`（如果進位標誌被設定則跳轉）
 
-bios set `al` the number of sectors read,always compare it to the expected number
+BIOS 會在 `al` 中設定實際讀取的扇區數，務必將其與預期的扇區數進行比較
 
 編譯指令
 ```c
