@@ -15,9 +15,9 @@ CC= /usr/local/i386elfgcc/bin/i386-elf-gcc
 LD= /usr/local/i386elfgcc/bin/i386-elf-ld
 GDB = /usr/bin/gdb
 
-# 編譯選項 (-g 為除錯資訊)
-CFLAGS = -g -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs \
-		 -Wall -Wextra -Werror
+# 編譯選項 (-g 為除錯資訊，-ffreestanding 為獨立編譯，-Wall -Wextra 為警告，-fno-exceptions 禁用異常處理機制，-m32 為32位元模式)
+CFLAGS = -g -ffreestanding -Wall -Wextra -fno-exceptions -m32
+
 
 # 組合開機磁區與核心，製作作業系統映像檔
 os-image.bin: boot/bootsect.bin kernel.bin
@@ -46,7 +46,7 @@ debug : os-image.bin kernel.elf
 
 # 編譯 C 程式碼為物件檔案
 %.o: %.c ${HEADERS}
-	${CC} ${CFLAGS} -ffreestanding -c $< -o $@
+	${CC} ${CFLAGS}  -c $< -o $@
 
 # 編譯組合語言為 ELF 格式物件檔案
 %.o : %.asm
