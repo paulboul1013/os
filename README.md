@@ -868,3 +868,57 @@ note added a new strings.c:`hex_to_ascii()` for  printing fo hex numbers
 simple revise rename `types.h` to `type.h` for language  consistency
 
 
+## fixes
+
+fix miscellaneous issues 
+
+osdev wiki has a section https://wiki.osdev.org/James_Molloy%27s_Tutorial_Known_Bugs。since followed tutorial (interrupts to malloc) need to make sure fix issues
+
+1. wrong CFLAGS
+
+add `-ffreestanding ` when compile `.o` files which includes `kernel_entry.o` and `kernel.bin` and `os-image.bin`
+
+before disabled libgcc(not libc) through the use of `-nostdlib` and didn't re-enable it for linking.since it's tricky 。will delete `-nostdlib`
+
+`-nostdinc` also passed to gcc 
+
+2. kernel.c `main()` function
+modify `kernel/kernel.c` and change `main()` to `kernel_main()` since gcc recoginzes `main` as a speical keyword and don't mess with that
+
+change `boot/kernel_entry.asm` to point to the new name accordingly
+
+fix the `i386-elf-ld: warning: cannot find entry symbol _start; defaulting to 0000000000001000 warning` message，add a `global _start;` and define the _start: label in `boot/kernel_entry.asm`
+
+
+3. reivented datatypes
+
+it's a bad idea to define non-standard data types like `u32` and such，since C99 introdcues standard fixed-width data types like `uint32_t`
+
+need to include `<stdint.h>` works even in `-ffreestanding` (but requires stdlibs) and use those data types instead of our own and then delte `type.h`
+
+also delete the `__asm__` and `__volatile__` since they aren't needed
+
+4. Improperly aligned `kmalloc`
+
+because `kamlloc` uses a size parameter，use the correct data type，`size_t` instead of `u32int_t`，`size_t` should be used for all parameters
+
+5. missing function
+implement the missing `mem*` function
+
+6. interrupt handlers
+`cli` is redundant because already established on the IDT entriess if interrrupts are enabled within a handler using the `idt_gate_t` flags
+
+`sti` also，as `iret` loads eflags value form the stack，contains a bit telling whether interrupts are on or off，In other words interrupt handler automatically restores interrupts whether or not interrupts were enabled before this interrupt
+
+on `cpu/isr.h`，`struct registers_t` have many issues。first is alledged `esp` is renamed to `useless` 。the value is useless because it has to to do with the current stack context，not what was interrupted。so rename `useresp` to `esp`
+
+add `cld ` just before `call isr_handler` on `cpu/interrupt.asm` as suggested by the osdev wiki
+
+important issuse with `cpu/interrupt.asm` as suggested by the osdev wiki
+
+final important issue with `cpu/interrupt.asm`。The common stubs create an instance of `struct registers` on the stack and then call the C handler ，but that break the ABI since the stack belongs to the called function and they may change them as they please。need to pass the struct as a pointer
+
+to achieve this ，edit `cpu/isr.h` and `cpu/isr.c` and change `registers_t r` into `registers_t *t` then instead of accessing the fields of the struct via `.` access the field of the pointer via `->` finally in the `cpu/interrupt.asm` and add a `push esp` before calling both `isr_handler` and `irq_handler`。remember to also `pop eax` to clear the pointer afterwards。
+
+both current callbacks ，the timer and the keyboard also need to be change to use a pointer to `register_t`
+
