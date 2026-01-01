@@ -466,19 +466,21 @@ i386-elf-ld -o function.bin -Ttext 0x0 --oformat binary function.o
 
 `.o` 檔案包含許多除錯資訊和標籤
 
-## Decompile
+## 反編譯程式
 檢查機器碼
 ```c
 ndisasm -b 32 function.bin
 ```
 
 ## more program
-small programs,which feature
-1. local variables `localvars.c`
-2. function calls `functioncalls.c`
-3. pointers `pointers.c`
 
-Then compile and disassemble them，examine the resulting mahcine code
+小型程式，包含以下特性：
+1. 區域變數 `localvars.c`
+2. 函數呼叫 `functioncalls.c`
+3. 指標 `pointers.c`
+
+然後編譯並反組譯它們，檢查產生的機器碼
+
 
 ### compile program
 ```c
@@ -487,21 +489,22 @@ i386-elf-gcc -ffreestanding -c functioncalls.c -o functioncalls.o
 i386-elf-gcc -ffreestanding -c pointers.c -o pointers.o
 ```
 
-exmine with `i386-elf-objdump`
+用`i386-elf-objdump` 檢查
 ```c
 i386-elf-objdump -d localvars.o
 i386-elf-objdump -d functioncalls.o
 i386-elf-objdump -d pointers.o
 ```
 
-### link program
+### 連接程式
 ```c
 i386-elf-ld -o localvars.bin -Ttext 0x0 --oformat binary localvars.o
 i386-elf-ld -o functioncalls.bin -Ttext 0x0 --oformat binary functioncalls.o
 i386-elf-ld -o pointers.bin -Ttext 0x0 --oformat binary pointers.o
 ```
-examine with xxd
 
+
+用xxd檢查
 ```c
 xxd localvars.o
 xxd localvars.bin
@@ -511,7 +514,7 @@ xxd pointers.o
 xxd pointers.bin
 ```
 
-### decompile program
+### 反編譯程式
 ```c
 ndisasm -b 32 localvars.bin
 ndisasm -b 32 functioncalls.bin
