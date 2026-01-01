@@ -923,3 +923,7 @@ to achieve this ，edit `cpu/isr.h` and `cpu/isr.c` and change `registers_t r` i
 
 both current callbacks ，the timer and the keyboard also need to be change to use a pointer to `register_t`
 
+## 更新cross-compiler版本
+
+原本教學是到El Capitan，查了才知道這是mac的電腦版本，才需要在更新原本的cross-compiler。基本上跟之前的教學沒啥兩樣，算是最後的章節了
+
