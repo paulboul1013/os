@@ -1,5 +1,17 @@
 # os
 
+## 待實現功能
+
+[x]tab補全
+[]命令歷史記錄（上下鍵瀏覽）
+[]CLEAR：清空螢幕
+[]TIME：顯示系統時間
+[]ECHO：回顯文字
+[]CALC：簡單計算器
+[]分頁機制（Paging）
+[]實作 kfree()（釋放記憶體）
+[]設計檔案系統結構（FAT12/簡化版）
+
 ## bootsector
 
 當電腦開啟時，bios不知道如何載入os，這是boot sector的任務，boot sector一定要放在標準位置，位置在第一個磁碟的磁區(cylinder 0, head 0, sector 0)，整個boot sector有512bytes大  
