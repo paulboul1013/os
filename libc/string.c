@@ -72,3 +72,16 @@ int strcmp(char s1[],char s2[]){
     }
     return s1[i]-s2[i];
 }
+
+// 檢查字串 s 是否以 prefix 開頭
+// 返回 1 如果匹配，0 如果不匹配
+int strstartswith(const char s[],const char prefix[]){
+    int i=0;
+    while(prefix[i]!='\0'){
+        if(s[i]=='\0' || s[i]!=prefix[i]){
+            return 0;
+        }
+        i++;
+    }
+    return 1;
+}
