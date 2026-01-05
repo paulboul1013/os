@@ -31,10 +31,13 @@ void user_input(char *input){
         kprint(", physical address: ");
         kprint(phys_str);
         kprint("\n");
+    }else if (strcmp(input,"CLEAR")==0){
+        clear_screen();
+        kprint("> ");
+    }else{
+        kprint("You said: ");
+        kprint(input);
+        kprint("\n>");
     }
-
-    kprint("You said: ");
-    kprint(input);
-    kprint("\n>");
 
 }
