@@ -30,6 +30,8 @@ static const char* available_commands[] = {
     "END",
     "PAGE",
     "CLEAR",
+    "ECHO",
+    "CALC",
     NULL  // 結束標記
 };
 
@@ -233,10 +235,31 @@ static void keyboard_callback(registers_t *regs){
     if (scancode == BACKSPACE){
         // Only allow backspace if there are characters in buffer and cursor is past input line start
         if (strlen(key_buffer) > 0) {
+            int was_browsing_history = (history_index != -1);
+            
+            // 如果正在瀏覽歷史記錄，先退出歷史瀏覽模式並恢復到當前輸入
+            if (was_browsing_history) {
+                history_index = -1;
+                // 恢復到當前輸入（清除歷史記錄顯示）
+                clear_and_display(current_input);
+                // 現在 key_buffer 已經是 current_input
+            }
+            
+            // 從緩衝區移除字元
             backspace(key_buffer);
+            
+            // 清除螢幕上的字元
             kprint_backspace(input_line_start_offset);
-            // 重置歷史記錄索引，因為用戶正在編輯
-            history_index = -1;
+            
+            // 如果之前正在瀏覽歷史記錄，需要更新 current_input 以保持同步
+            if (was_browsing_history) {
+                int i = 0;
+                while (key_buffer[i] != '\0' && i < 255) {
+                    current_input[i] = key_buffer[i];
+                    i++;
+                }
+                current_input[i] = '\0';
+            }
         }
     }else if (scancode == TAB){
         // Tab 自動補全
@@ -261,7 +284,7 @@ static void keyboard_callback(registers_t *regs){
     } else{
         char letter=sc_ascii[(int)scancode];
         if (letter != '?') { // 只處理有效的 ASCII 字元
-            //kprint ony accepts char[]
+            // 添加到緩衝區並顯示在螢幕上
             char str[2]={letter,'\0'};
             append(key_buffer,letter);
             kprint(str);
