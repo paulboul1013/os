@@ -237,12 +237,17 @@ static void keyboard_callback(registers_t *regs){
         if (strlen(key_buffer) > 0) {
             int was_browsing_history = (history_index != -1);
             
-            // 如果正在瀏覽歷史記錄，先退出歷史瀏覽模式並恢復到當前輸入
+            // 如果正在瀏覽歷史記錄，開始編輯時退出歷史瀏覽模式
             if (was_browsing_history) {
+                // 保存當前編輯的內容到 current_input（因為用戶開始編輯歷史記錄）
+                int i = 0;
+                while (key_buffer[i] != '\0' && i < 255) {
+                    current_input[i] = key_buffer[i];
+                    i++;
+                }
+                current_input[i] = '\0';
+                // 退出歷史瀏覽模式，進入正常編輯模式
                 history_index = -1;
-                // 恢復到當前輸入（清除歷史記錄顯示）
-                clear_and_display(current_input);
-                // 現在 key_buffer 已經是 current_input
             }
             
             // 從緩衝區移除字元
@@ -251,7 +256,7 @@ static void keyboard_callback(registers_t *regs){
             // 清除螢幕上的字元
             kprint_backspace(input_line_start_offset);
             
-            // 如果之前正在瀏覽歷史記錄，需要更新 current_input 以保持同步
+            // 如果之前正在瀏覽歷史記錄，同步更新 current_input
             if (was_browsing_history) {
                 int i = 0;
                 while (key_buffer[i] != '\0' && i < 255) {
