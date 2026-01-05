@@ -30,7 +30,7 @@ void user_input(char *input){
         kprint(page_str);
         kprint(", physical address: ");
         kprint(phys_str);
-        kprint("\n");
+        kprint("\n> ");
     }else if (strcmp(input,"CLEAR")==0){
         clear_screen();
         kprint("> ");
