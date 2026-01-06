@@ -19,5 +19,6 @@ void kprint_at(char *message,int col,int row);
 void kprint(char *message);
 void kprint_backspace(int min_offset);
 int get_cursor_offset();
+void set_cursor_offset(int offset);
 
 #endif
