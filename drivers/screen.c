@@ -11,7 +11,7 @@ int get_offset_row(int offset);
 int get_offset_col(int offset);
 
 //public screen API
-void kprint_at(char *message,int col,int row){
+void kprint_at(const char *message,int col,int row){
     //set cursor if col/row are negative
     int offset;
     if (col>=0 && row>=0){
@@ -35,7 +35,7 @@ void kprint_at(char *message,int col,int row){
 
 }
 
-void kprint(char *message){
+void kprint(const char *message){
     kprint_at(message,-1,-1);
 }
 
