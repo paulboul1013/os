@@ -15,6 +15,8 @@
 #define LEFT_ARROW 0x4B
 #define RIGHT_ARROW 0x4D
 #define E0_PREFIX 0xE0
+#define LSHIFT 0x2A
+#define RSHIFT 0x36
 
 // 命令歷史記錄
 #define MAX_HISTORY 50
@@ -27,6 +29,7 @@ static  char key_buffer[256];
 static int input_line_start_offset = 0; // Track the start of current input line
 static int expecting_e0 = 0; // 標記是否正在等待 0xE0 後續的 scancode
 static int cursor_position = 0; // 光標在 key_buffer 中的位置（0 = 開頭，strlen = 末尾）
+static int shift_active = 0; // 標記 Shift 鍵是否被按下
 
 // 可用命令列表（用於 Tab 自動補全）
 static const char* available_commands[] = {
@@ -362,16 +365,38 @@ const char *sc_name[] = {
 
 const char  sc_ascii[] ={
     '?', '?', '1', '2', '3', '4', '5', '6',     
-    '7', '8', '9', '0', '-', '=', '?', '?', 'Q', 'W', 'E', 'R', 'T', 'Y', 
-        'U', 'I', 'O', 'P', '[', ']', '?', '?', 'A', 'S', 'D', 'F', 'G', 
-        'H', 'J', 'K', 'L', ';', '\'', '`', '?', '\\', 'Z', 'X', 'C', 'V', 
-        'B', 'N', 'M', ',', '.', '/', '?', '?', '?', ' '
+    '7', '8', '9', '0', '-', '=', '?', '?', 'q', 'w', 'e', 'r', 't', 'y', 
+        'u', 'i', 'o', 'p', '[', ']', '?', '?', 'a', 's', 'd', 'f', 'g', 
+        'h', 'j', 'k', 'l', ';', '\'', '`', '?', '\\', 'z', 'x', 'c', 'v', 
+        'b', 'n', 'm', ',', '.', '/', '?', '?', '?', ' '
+};
+
+const char sc_ascii_shift[] = {
+    '?', '?', '!', '@', '#', '$', '%', '^',     
+    '&', '*', '(', ')', '_', '+', '?', '?', 'Q', 'W', 'E', 'R', 'T', 'Y', 
+        'U', 'I', 'O', 'P', '{', '}', '?', '?', 'A', 'S', 'D', 'F', 'G', 
+        'H', 'J', 'K', 'L', ':', '\"', '~', '?', '|', 'Z', 'X', 'C', 'V', 
+        'B', 'N', 'M', '<', '>', '?', '?', '?', '?', ' '
 };
 
 
 static void keyboard_callback(registers_t *regs){
     //The PIC leaves us the scancode in port 0x60
     uint8_t scancode=port_byte_in(0x60);
+
+    // 處理 Shift 鍵的按下 (Make code)
+    if (scancode == LSHIFT || scancode == RSHIFT) {
+        shift_active = 1;
+        UNUSED(regs);
+        return;
+    }
+    
+    // 處理 Shift 鍵的放開 (Break code)
+    if (scancode == (LSHIFT | 0x80) || scancode == (RSHIFT | 0x80)) {
+        shift_active = 0;
+        UNUSED(regs);
+        return;
+    }
 
     // 處理 0xE0 前綴（特殊鍵如上下左右鍵）
     if (scancode == E0_PREFIX) {
@@ -497,7 +522,13 @@ static void keyboard_callback(registers_t *regs){
         // 重置歷史記錄索引
         history_index = -1;
     } else{
-        char letter=sc_ascii[(int)scancode];
+        char letter;
+        if (shift_active) {
+            letter = sc_ascii_shift[(int)scancode];
+        } else {
+            letter = sc_ascii[(int)scancode];
+        }
+        
         if (letter != '?') { // 只處理有效的 ASCII 字元
             int was_browsing_history = (history_index != -1);
             
