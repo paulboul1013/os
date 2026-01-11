@@ -38,6 +38,7 @@ static const char* available_commands[] = {
     "clear",
     "echo",
     "calc",
+    "time",
     NULL  // 結束標記
 };
 
