@@ -85,3 +85,12 @@ int strstartswith(const char s[],const char prefix[]){
     }
     return 1;
 }
+
+void strcat(char dest[], const char src[]) {
+    int i = 0;
+    int j = strlen(dest);
+    while (src[i] != '\0') {
+        dest[j++] = src[i++];
+    }
+    dest[j] = '\0';
+}
