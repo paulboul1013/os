@@ -33,11 +33,11 @@ static int shift_active = 0; // 標記 Shift 鍵是否被按下
 
 // 可用命令列表（用於 Tab 自動補全）
 static const char* available_commands[] = {
-    "END",
-    "PAGE",
-    "CLEAR",
-    "ECHO",
-    "CALC",
+    "end",
+    "page",
+    "clear",
+    "echo",
+    "calc",
     NULL  // 結束標記
 };
 
