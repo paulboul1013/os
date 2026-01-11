@@ -17,10 +17,10 @@ void kernel_main(){
 }
 
 void user_input(char *input){
-    if (strcmp(input,"END")==0){
+    if (strcmp(input,"end")==0){
         kprint("Stopping the CPU\n");
         asm volatile("hlt");
-    }else if (strcmp(input,"PAGE")==0){
+    }else if (strcmp(input,"page")==0){
         //get test kmalloc
         uint32_t phys_addr;
         uint32_t page=kmalloc(1000,1,&phys_addr);
@@ -33,15 +33,15 @@ void user_input(char *input){
         kprint(", physical address: ");
         kprint(phys_str);
         kprint("\n> ");
-    }else if (strcmp(input,"CLEAR")==0){
+    }else if (strcmp(input,"clear")==0){
         clear_screen();
         kprint("> ");
-    }else if (strstartswith(input,"ECHO ")){
+    }else if (strstartswith(input,"echo ")){
         // ECHO 命令：顯示後面的文字
         const char* text = input + 5; // 跳過 "ECHO "
         kprint(text);
         kprint("\n> ");
-    }else if (strstartswith(input,"CALC ")){
+    }else if (strstartswith(input,"calc ")){
         // CALC 命令：簡單計算器
         calc_command(input);
     }else{
