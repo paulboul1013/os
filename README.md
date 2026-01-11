@@ -5,12 +5,16 @@
 [x]tab補全  
 [x]命令歷史記錄(上下鍵瀏覽) 
 [x]CLEAR：清空螢幕  
-[]TIME：顯示系統時間  
+[x]TIME：顯示系統時間
 [x]ECHO：回顯文字  
 [x]CALC：簡單計算器  
 []分頁機制(Paging)   
 []實作 kfree()（釋放記憶體）  
 []設計檔案系統結構（FAT12/簡化版）  
+
+## 細節修改
+time:顯示現在時間不是台灣的時區，還要再修改
+
 
 ## bootsector
 
@@ -570,19 +574,18 @@ Where is the ASCII `0x48656c6c6f` for "Hello"?
 
 ## kernel-barebones
 
-create a simple kernel and a bootsector capable of booting it
+建立一個簡單的核心（kernel）以及一個能夠啟動該核心的開機磁區（boot sector）
 
 ### kernel
-this time implement C kernel just print an `X`on the top left  corner of the screen
-
-notice the dummy function that does nothing。That function will force us to create a kernel entry routinue which does not point to byte 0x0 in our kernel，but to an actual label which we know that launches it，the case is `main()`
+一個 16-bit boot sector（組語） 載入並跳轉到一個 C kernel，而該 kernel 只做一件事——在螢幕左上角印出一個 X。
+同時也會包含你特別提到的 dummy function，用來強迫 kernel 入口不是位於 0x0，而是明確的 main() 標籤。
 
 compile instruction
 ```c
 /usr/local/i386elfgcc/bin/i386-elf-gcc -ffreestanding -c kernel.c -o kernel.o
 ```
 
-the routine code is `kernel_entry.asm`。will learn how to use `[extern]`  declarations in assebly。to compile this file in stread of generate a binary，will generate an `elf` format which will be linked with `kernel.o`
+例程程式碼為 `kernel_entry.asm`。將學習如何在組合語言中使用 `[extern]` 宣告。此檔案不會編譯成二進位檔（binary），而是產生 ELF 格式，並與 `kernel.o` 進行連結。
 
 compile instruction
 ```c
@@ -591,11 +594,11 @@ nasm kernel_entry.asm -f elf -o kernel_entry.o
 
 ### the linker
 
-linker is usefull tool
+連結器（linker）是一個非常有用的工具。
 
-to link both object files into a single binary kernel and resolve label references
+它可以將多個目的檔（object files）連結成單一的核心二進位檔（kernel binary），並解析各種標籤（label）的參照。
 
-the kernel will be placed  not at `0x0` in memory，but at `0x1000`.the bootsector need to know this address too
+核心不會被放置在記憶體的 `0x0`位址，而是放在 `0x1000`。開機磁區（boot sector）也必須知道這個位址。
 
 compile instruction
 ```c
@@ -603,7 +606,8 @@ compile instruction
 ```
 
 ### the bootsector
-`bootsector.asm` and examine the code
+`bootsector.asm`，並檢視其程式碼
+
 
 compile instruction
 ```c
@@ -612,9 +616,9 @@ nasm bootsect.asm -f bin -o bootsect.bin
 
 
 ### putting it all together
-have tow separate files for the bootsector and the kernel
 
-use link into a single file
+為開機磁區（bootsector）與核心（kernel）各自使用兩個獨立的檔案，  再透過連結（link）將它們合併成單一檔案。
+
 
 concatenate instruction
 ```c
@@ -622,29 +626,30 @@ cat bootsect.bin kernel.bin > os-image.bin
 ```
 
 ### run os-image.bin
+如果發生磁碟載入錯誤，可能需要在 QEMU 中加入軟碟參數（floppy = `0x0`，硬碟 = `0x80`）。
 
-if have a disk laod errors that you may need to add qemu floppy parameters(floppy = `0x0`, hdd = `0x80`)
 ```c
 qemu-system-i386 -fda os-image.bin  //from floopy 
 ```
 
-can't use `qemu-system-i386 -hda os-image.bin` to start os from hard disk，because the os-image.bin is too small
+不能使用 `qemu-system-i386 -hda os-image.bin` 從硬碟啟動作業系統，因為 `os-image.bin` 的容量太小。
 
 
-will see four messages:
+會看到四則訊息：
 - "Started in 16-bit Real Mode"
 - "Loading kernel into memory"
-- (Top left) "Landed in 32-bit Protected Mode"
-- (Top left, overwriting previous message) "X"
+- （左上角）"Landed in 32-bit Protected Mode"
+- （左上角，覆蓋先前訊息）"X"
+
 
 
 ## check_point
 
-learn how to debug the kernel with gdb
+學習如何使用 GDB 偵錯核心（kernel）。
 
-have already run own kernel，but it very little，just print 'X'
+已經執行了自己的核心，但功能非常簡單，只會印出一個 'X'。
 
-install gdb used to debug
+install gdb use to debug
 ```c
 which gdb
 /usr/bin/gdb
@@ -656,68 +661,82 @@ Makefile:
 GDB = /usr/bin/gdb
 ```
 
-use `make debug`。use build `kernel.elf` ，which is an object file(not binary) with all the symbols generated on the kernel，must be add `-g` flag，check it with `xxd` and will see some strings。but acually correct way to examine the strings in an object file is `strings kernel.elf`
+使用 `make debug`。會建立 `kernel.elf`，這是一個物件檔（不是二進位檔），包含核心中所有產生的符號。  
+編譯時必須加上 `-g` 旗標。可以用 `xxd` 檢查，會看到一些字串，但檢查物件檔中字串的正確方法是 `strings kernel.elf`。
 
-qemu can co-work with gdb，use `make debug`
+QEMU 可以與 GDB 配合使用，使用 `make debug`：
 
-1. set breakpoint in `kernel.c:main()`:`b main`
-2. run the os:`continue`
-3. run two steps，`next` and the other `next`。will see the command set `X`，but not yet show character on the screen
-4. see what's in the video memory: `print *video_memor`，there is the "L" from "Landed in 32-bit Protected Mode"
-5. make sure that `video_memory` points to the correct address: `print video_memory`
-6. `next` to show `X`
-7. make sure `print video_memory` and look at the qemu screen
+1. 在 `kernel.c:main()` 設定斷點：`b main`
+2. 執行作業系統：`continue`
+3. 執行兩個步驟：`next` 再 `next`，會看到指令已經設定 'X'，但螢幕上尚未顯示字元
+4. 查看影片記憶體內容：`print *video_memory`，會看到 "L"，來自 "Landed in 32-bit Protected Mode"
+5. 確認 `video_memory` 指向正確位址：`print video_memory`
+6. `next`，讓 'X' 顯示在螢幕上
+7. 再次確認：`print video_memory`，並觀察 QEMU 螢幕
+
+
 
 ## video-ports
 
-learn how to use the VGA card data ports
+學習如何使用 VGA 顯示卡的資料埠（data ports）。
 
-examine the I/O ports which map the screen cursor position
+檢查對應螢幕游標位置的 I/O 埠。
 
-will query port `0x3d4` with value `14` to rquest the cursor position high byte and the same port with `15` for the low byte
+- 檢查port `0x3D4`，設定值為 `14` 以取得游標位置的高位元組  
+- 同一埠設定值為 `15` 以取得低位元組
 
-use gdb to check because still can't print variables on the screen，set a breakpoint for a specific line。
+因為還無法直接在螢幕上印出變數，所以使用 GDB 來檢查，並在特定程式行設置斷點。
 
-breakpoint kernel.c:21 and use the print command to check variables 
+- 在 `kernel.c:21` 設置斷點，使用 `print` 指令來檢查變數
+
 
 ## video-driver
 
-write strings on the screen
+在螢幕上寫入字串。
 
-can able to output text on the screen
+可以在螢幕上輸出文字。
 
-see `drivers/screen.h` and will  see have defined some constants for the VGA card driver and three functions，one to clear and another couple to write strings，last is the famously named `kprint` for kernel print
+查看 `drivers/screen.h`，會看到定義了一些 VGA 顯示卡驅動的常數，以及三個函式：  
+- 一個用來清除螢幕  
+- 另外兩個用來寫入字串  
+- 最後一個著名的 `kprint`，用於核心輸出（kernel print）
 
-also see  `drivers/screen.c` ，it's implemenation of the `drivers/screen.h`
+也可以查看 `drivers/screen.c`，這是 `drivers/screen.h` 的實作檔案。
 
-there are two I/O port access routinues that，`get` and `set_cursor_offset()`
+其中有兩個 I/O 埠存取例程：`set_cursor_offset()` 與 `set_cursor_offset()`。
 
-directory mainipulates the video memory，`print_char()`
+直接操作影像記憶體，使用 `print_char()` 函式。
+
 
 ### kprint_at
 
-`kprint_at` may be called with a `-1` value for `col` or `row`，which indicates what will print the string at the current cursor posistion
+`kprint_at` 可能會被呼叫時傳入 `-1` 作為 `col` 或 `row` 的值，這表示字串將會從目前游標位置開始印出。
 
-sets three variables for the `col/row` and `offset`.it iterates through the `char*` and calls `print_char()` with the current coordinates
+會設定三個變數：`col`、`row` 和 `offset`。  
+函式會逐一遍歷字元指標 `char*`，並以當前座標呼叫 `print_char()`。
 
-the `print_char` returns the offset of the next cursor position and reuse it for the next loop 
+`print_char` 會回傳下一個游標位置的 offset，並在下一個迴圈中重複使用。
 
-`kprint` is basically a wrapper for `kprint_at`
+`kprint` 基本上是 `kprint_at` 的封裝（wrapper）。
+
 
 
 ### print_char
 
-like `kprint_at`，`print_char` allows cols/rows to be `-1 `，get the cursor position from the hardware，using the `ports.c` 
+像 `kprint_at` 一樣，`print_char` 也允許 `col` / `row` 為 `-1`，此時會從硬體取得游標位置，使用 `ports.c`。
 
-`print_char` also handles newlines。will reset the cursor offset to column 0 of the next row
+`print_char` 也會處理換行（newline），將游標 offset 重設到下一行的第 0 欄。
 
-the VGA cells take `two` bytes，one for character and another one for the color background
+VGA 的每個儲存格佔用 `兩個`位元組，一個用於字元，另一個用於顏色與背景。
+
 
 ### kernel.c
 
-new kernel is able to print strings
+新的kernel已經可以印出字串。
 
-have correct character positioning，spanning throug multiple lines，line break。If it tires to write outside of the screen range? it will solve next section
+具有正確的字元定位，能跨越多行並處理換行(`\n`)。  
+如果嘗試寫入螢幕範圍之外的字元？這部分將在下一節解決。
+
 
 ## viedo-scroll
 
