@@ -8,12 +8,8 @@
 
 void kernel_main(){
     isr_install();
+    kprint("> ");
     irq_install();
-
-    kprint(">");
-   
-    // kprint("Type something, it will go through the kernel\n"
-    //     "Type END to halt the CPU or PAGE to request a kmalloc()\n> ");
 }
 
 void user_input(char *input){
