@@ -4,6 +4,7 @@
 #include "../libc/string.h"
 #include "../libc/mem.h"
 #include "../libc/cal.h"
+#include "../drivers/rtc.h"
 #include <stdint.h>
 
 void kernel_main(){
@@ -40,6 +41,11 @@ void user_input(char *input){
     }else if (strstartswith(input,"calc ")){
         // CALC 命令：簡單計算器
         calc_command(input);
+    }else if (strcmp(input, "time") == 0) {
+        char time_str[64] = "";
+        get_time(time_str);
+        kprint(time_str);
+        kprint("\n> ");
     }else{
         // 其他情況只顯示提示符
         kprint("> ");
