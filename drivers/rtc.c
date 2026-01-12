@@ -5,11 +5,14 @@
 #define CMOS_ADDRESS 0x70
 #define CMOS_DATA    0x71
 
+//setting rtc flag
 int get_update_in_progress_flag() {
     port_byte_out(CMOS_ADDRESS, 0x0A);
     return (port_byte_in(CMOS_DATA) & 0x80);
 }
 
+//get rtc register value
+// like 0x00 register is get the second value
 uint8_t get_RTC_register(int reg) {
     port_byte_out(CMOS_ADDRESS, reg);
     return port_byte_in(CMOS_DATA);
@@ -21,10 +24,12 @@ void get_time(char* time_str) {
     uint8_t second = get_RTC_register(0x00);
     uint8_t minute = get_RTC_register(0x02);
     uint8_t hour   = get_RTC_register(0x04);
+    uint8_t week   = get_RTC_register(0x06);
     uint8_t day    = get_RTC_register(0x07);
     uint8_t month  = get_RTC_register(0x08);
     uint8_t year   = get_RTC_register(0x09);
 
+    
     uint8_t registerB = get_RTC_register(0x0B);
 
     // Convert BCD to binary if necessary
@@ -61,6 +66,32 @@ void get_time(char* time_str) {
     if (day < 10) strcat(time_str, "0");
     int_to_ascii(day, buf);
     strcat(time_str, buf);
+    strcat(time_str, " ");
+
+    //Week
+    switch (week){
+        case 1:
+            strcat(time_str, "Sun");
+            break;
+        case 2:
+            strcat(time_str, "Mon");
+            break;
+        case 3:
+            strcat(time_str, "Tue");
+            break;
+        case 4:
+            strcat(time_str, "Wed");
+            break;
+        case 5:
+            strcat(time_str, "Thu");
+            break;
+        case 6:
+            strcat(time_str, "Fri");
+            break;
+        case 7:
+            strcat(time_str, "Sat");
+            break;
+    }
     strcat(time_str, " ");
     
     // Hour
