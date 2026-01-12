@@ -961,3 +961,50 @@ both current callbacks ，the timer and the keyboard also need to be change to u
 
 原本教學是到El Capitan，查了才知道這是mac的電腦版本，才需要在更新原本的cross-compiler。基本上跟之前的教學沒啥兩樣，算是最後的章節了
 
+## rtc
+
+實作實時時鐘 (Real Time Clock, RTC) 驅動，主要透過 CMOS I/O 埠存取硬體時間資訊。
+
+### CMOS 埠口存取
+* **Index Port (0x70)**: 用於指定要存取的暫存器索引。
+* **Data Port (0x71)**: 用於讀取或寫入指定暫存器的資料。
+
+> **注意**: 在存取 Port 0x70 時，最高位元 (bit 7) 是 **NMI Disable** 位元。將其設為 1 會暫時停用不可遮蔽中斷 (NMI)，許多開源系統在存取 CMOS 時會設定此位元以確保操作原子性。
+
+### 關鍵暫存器與資料格式
+RTC 提供暫存器來儲存秒、分、時、日、月、年等其他資訊：
+* `0x00`: 秒
+* `0x02`: 分
+* `0x04`: 時
+* `0x07`: 日
+* `0x08`: 月
+* `0x09`: 年
+* `0x0A (Status Register A)`: 
+    * **Bit 7 (UIP)**: Update In Progress。若此位元為 1，表示 RTC 正在更新時間，此時讀取的值可能無效，驅動程式必須等待其變為 0。
+* `0x0B (Status Register B)`:
+有四種模式
+    * binary 模式 或 BCD 模式
+    * 12 小時制模式 或 24 小時制模式
+有些format bit在register B中無法改變，所以必須處理這四種可能。並且別試著改變register B中的值，必須先讀取register B中的值，找到你要的格式，再進行處理。
+
+- 在register B中，bit 1(value=2)是代表24小時制
+- 在register B中，bit 2(value=4)是代表binary模式
+
+binary mode就是預期的正常時間，假設時間是1:59:48 AM，hours的值會是1，minutes的值是59=0x3b，seconds的值是48=0x30
+
+在BCD mode中，每一對16進位的byte將被修改成顯示十進位的數字，所以1:59:48 AM 會有hours是1，minutes的值是0x59=89，seconds的值是0x48=72，為了轉換成二進位制，需要以下公式來轉換。binary =((bcd/16)*10)+(bcd & 0xf)。優化公式版本binary = ( (bcd & 0xF0) >> 1) + ( (bcd & 0xF0) >> 3) + (bcd & 0xf)。
+
+
+12小時制轉換24小時有點麻煩，如果hour是pm，那0x80 bit將被設為1，所以必須遮罩掉，然後午夜12，1 am是1，注意午夜不是0，是12，這是需要處理12小時制到24小時制的特殊情況(設置12為0)
+
+
+### 驅動實作細節
+1. **等待更新完成**: 讀取 `0x0A` 確保 UIP 位元為 0。
+2. **週期性中斷 (可選)**: 若需要高頻率計時，可以設定 Register B 的 PIE 位元，RTC 會觸發 **IRQ 8** 中斷。中斷頻率透過 Register A 的低 4 位元 (Rate Selection) 控制。
+3. **優化bcd to binary**
+
+參考資料：
+* [OSDev CMOS Wiki](https://wiki.osdev.org/CMOS)
+* [OSDev RTC Wiki](https://wiki.osdev.org/RTC)
+
+
