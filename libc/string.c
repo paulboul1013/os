@@ -94,3 +94,13 @@ void strcat(char dest[], const char src[]) {
     }
     dest[j] = '\0';
 }
+
+int atoi(char s[]) {
+    int res = 0;
+    int i = 0;
+    while (s[i] >= '0' && s[i] <= '9') {
+        res = res * 10 + (s[i] - '0');
+        i++;
+    }
+    return res;
+}
