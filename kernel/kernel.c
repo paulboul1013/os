@@ -5,6 +5,7 @@
 #include "../libc/mem.h"
 #include "../libc/cal.h"
 #include "../drivers/rtc.h"
+#include "../cpu/timer.h"
 #include <stdint.h>
 
 void kernel_main(){
@@ -34,20 +35,20 @@ void user_input(char *input){
         clear_screen();
         kprint("> ");
     }else if (strstartswith(input,"echo ")){
-        // ECHO 命令：顯示後面的文字
-        const char* text = input + 5; // 跳過 "ECHO "
+        const char* text = input + 5;
         kprint(text);
         kprint("\n> ");
     }else if (strstartswith(input,"calc ")){
-        // CALC 命令：簡單計算器
         calc_command(input);
     }else if (strcmp(input, "time") == 0) {
         char time_str[64] = "";
         get_time(time_str);
         kprint(time_str);
         kprint("\n> ");
+    }else if (strcmp(input,"sleep") == 0){
+        sleep(1);
+        kprint("> ");
     }else{
-        // 其他情況只顯示提示符
         kprint("> ");
     }
 
