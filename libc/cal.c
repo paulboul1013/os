@@ -3,7 +3,7 @@
 #include "../drivers/screen.h"
 
 // 將字串轉換為整數
-int atoi(const char* str) {
+int cal_parse(const char* str) {
     int result = 0;
     int sign = 1;
     int i = 0;
