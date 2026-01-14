@@ -28,7 +28,7 @@ load_kernel:
     call print_nl
 
     mov bx,KERNEL_OFFSET ; read from disk and store in 0x1000
-    mov dh ,31 ; dh is for read 16 sectors。our future kernel will be larger，make it bigger
+    mov dh ,50 ; Increased from 31 to 50 sectors to load the full kernel
     mov dl,[BOOT_DRIVE]
     call disk_load
     ret

@@ -37,14 +37,14 @@ void user_input(char *input){
     }else if (strcmp(input,"malloc")==0){
         uint32_t m1 = kmalloc(100, 0, NULL);
         uint32_t m2 = kmalloc(100, 0, NULL);
-        char s1[16]; hex_to_ascii(m1, s1);
-        char s2[16]; hex_to_ascii(m2, s2);
+        char s1[16] = ""; hex_to_ascii(m1, s1);
+        char s2[16] = ""; hex_to_ascii(m2, s2);
         kprint("Allocated 100 bytes at: "); kprint(s1); kprint("\n");
         kprint("Allocated 100 bytes at: "); kprint(s2); kprint("\n");
         kprint("Freeing first block...\n");
         kfree((void*)m1);
         uint32_t m3 = kmalloc(100, 0, NULL);
-        char s3[16]; hex_to_ascii(m3, s3);
+        char s3[16] = ""; hex_to_ascii(m3, s3);
         kprint("Re-allocated 100 bytes at: "); kprint(s3); kprint("\n");
         if (m1 == m3) kprint("Test Passed: Memory reused!\n");
         else kprint("Test Failed: Memory NOT reused!\n");
