@@ -34,9 +34,9 @@ kernel.elf: boot/kernel_entry.o ${OBJS}
 	${LD} -o $@ -Ttext 0x1000 $^ 
 
 
-# 執行 QEMU 模擬器
+# 執行 QEMU 模擬器 (加入音訊支援)
 run: os-image.bin
-	qemu-system-i386 -fda os-image.bin
+	qemu-system-i386 -fda os-image.bin -audiodev pa,id=audio0 -machine pcspk-audiodev=audio0
 
 
 # 啟動 QEMU 並連接 GDB 進行除錯
