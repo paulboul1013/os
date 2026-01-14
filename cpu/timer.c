@@ -28,10 +28,41 @@ void init_timer(uint32_t freq) {
 }
 
 void sleep(uint32_t seconds) {
-    volatile uint32_t target_tick = tick + (seconds * timer_freq);
-    asm volatile("sti"); // make sure interrupts are enabled
+    sleep_ms(seconds * 1000);
+}
+
+void sleep_ms(uint32_t ms) {
+    uint32_t ticks_to_wait = (ms * timer_freq) / 1000;
+    if (ticks_to_wait == 0 && ms > 0) ticks_to_wait = 1;
+    
+    uint32_t target_tick = tick + ticks_to_wait;
+    asm volatile("sti");
     while (tick < target_tick) {
         asm volatile("hlt");
     }
+}
+
+// Play sound using PIT Channel 2
+void play_sound(uint32_t nFrequency) {
+    uint32_t Div;
+    uint8_t tmp;
+
+    // Set PIT Channel 2 frequency
+    Div = 1193180 / nFrequency;
+    port_byte_out(0x43, 0xB6);
+    port_byte_out(0x42, (uint8_t) (Div & 0xFF));
+    port_byte_out(0x42, (uint8_t) ((Div >> 8) & 0xFF));
+
+    // And play the sound using the PC speaker
+    tmp = port_byte_in(0x61);
+    if (tmp != (tmp | 3)) {
+        port_byte_out(0x61, tmp | 3);
+    }
+}
+
+// Stop sound
+void nosound() {
+    uint8_t tmp = port_byte_in(0x61) & 0xFC;
+    port_byte_out(0x61, tmp);
 }
 

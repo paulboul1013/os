@@ -48,7 +48,13 @@ void user_input(char *input){
     }else if (strcmp(input,"sleep") == 0){
         sleep(1);
         kprint("> ");
-    }else{
+    }else if (strcmp(input, "beep") == 0) {
+        play_sound(200); // Lower frequency
+        sleep_ms(40);    // Very short beep (50ms)
+        nosound();
+        kprint("> ");
+    }
+    else{
         kprint("> ");
     }
 
