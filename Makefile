@@ -26,12 +26,12 @@ os-image.bin: boot/bootsect.bin kernel.bin
 
 # 連結核心物件檔案，生成純二進制核心
 kernel.bin: boot/kernel_entry.o ${OBJS}
-	${LD} -o $@ -Ttext 0x1000 $^ --oformat binary
+	${LD} -o $@ -T linker.ld $^ --oformat binary
 
 
 # 生成帶有符號表的 ELF 核心檔案，用於除錯
 kernel.elf: boot/kernel_entry.o ${OBJS}
-	${LD} -o $@ -Ttext 0x1000 $^ 
+	${LD} -o $@ -T linker.ld $^ 
 
 
 # 執行 QEMU 模擬器 (加入音訊支援)
