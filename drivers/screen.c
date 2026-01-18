@@ -39,6 +39,10 @@ void kprint(const char *message){
     kprint_at(message,-1,-1);
 }
 
+void kputchar(char c) {
+    print_char(c, -1, -1, WHITE_ON_BLACK);
+}
+
 void kprint_backspace(int min_offset) {
     int offset=get_cursor_offset();
     if (offset <= min_offset) return; //can't backspace past the input line start

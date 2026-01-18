@@ -4,6 +4,7 @@
 #include "../libc/string.h"
 #include "../libc/mem.h"
 #include "../libc/cal.h"
+#include "../libc/stdio.h"
 #include "../drivers/rtc.h"
 #include "../cpu/timer.h"
 #include <stdint.h>
@@ -34,31 +35,21 @@ void user_input(char *input){
         //get test kmalloc
         uint32_t phys_addr;
         uint32_t page=kmalloc(1000,1,&phys_addr);
-        char page_str[16]="";
-        hex_to_ascii(page,page_str);
-        char phys_str[16]="";
-        hex_to_ascii(phys_addr,phys_str);
-        kprint("Page: ");
-        kprint(page_str);
-        kprint(", physical address: ");
-        kprint(phys_str);
-        kprint("\nFreeing page...\n");
+        printf("Page: 0x%x, physical address: 0x%x\n", page, phys_addr);
+        printf("Freeing page...\n");
         kfree((void*)page);
         kprint("> ");
     }else if (strcmp(input,"malloc")==0){
         uint32_t m1 = kmalloc(100, 0, NULL);
         uint32_t m2 = kmalloc(100, 0, NULL);
-        char s1[16] = ""; hex_to_ascii(m1, s1);
-        char s2[16] = ""; hex_to_ascii(m2, s2);
-        kprint("Allocated 100 bytes at: "); kprint(s1); kprint("\n");
-        kprint("Allocated 100 bytes at: "); kprint(s2); kprint("\n");
-        kprint("Freeing first block...\n");
+        printf("Allocated 100 bytes at: 0x%x\n", m1);
+        printf("Allocated 100 bytes at: 0x%x\n", m2);
+        printf("Freeing first block...\n");
         kfree((void*)m1);
         uint32_t m3 = kmalloc(100, 0, NULL);
-        char s3[16] = ""; hex_to_ascii(m3, s3);
-        kprint("Re-allocated 100 bytes at: "); kprint(s3); kprint("\n");
-        if (m1 == m3) kprint("Test Passed: Memory reused!\n");
-        else kprint("Test Failed: Memory NOT reused!\n");
+        printf("Re-allocated 100 bytes at: 0x%x\n", m3);
+        if (m1 == m3) printf("Test Passed: Memory reused!\n");
+        else printf("Test Failed: Memory NOT reused!\n");
         kprint("> ");
     }else if (strcmp(input,"clear")==0){
         clear_screen();
@@ -81,6 +72,15 @@ void user_input(char *input){
         play_sound(200); // Lower frequency
         sleep_ms(40);    // Very short beep 
         nosound();
+        kprint("> ");
+    }else if (strcmp(input, "printf") == 0) {
+        printf("Printf test:\n");
+        printf("Char: %c\n", 'A');
+        printf("String: %s\n", "Hello, world!");
+        printf("Decimal: %d\n", -123);
+        printf("Unsigned: %u\n", 456);
+        printf("Hex: 0x%x\n", 0xDEADBEEF);
+        printf("Percent: %%\n");
         kprint("> ");
     }
     else{
