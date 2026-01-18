@@ -9,8 +9,9 @@
 [x]ECHO：回顯文字  
 [x]CALC：簡單計算器  
 []分頁機制(Paging)   
-[]實作 kfree()（釋放記憶體）  
+[x]實作 kfree()（釋放記憶體）  
 []設計檔案系統結構（FAT12/簡化版）  
+[x]Calling Global Constructors
 
 ## 細節修改
 time:顯示現在時間不是台灣的時區，還要再修改
