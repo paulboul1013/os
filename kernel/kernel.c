@@ -8,9 +8,20 @@
 #include "../cpu/timer.h"
 #include <stdint.h>
 
+int constructor_test_val = 0;
+
+__attribute__((constructor)) void test_constructor() {
+    constructor_test_val = 42;
+}
+
 void kernel_main(){
     isr_install();
     mem_init();
+    if (constructor_test_val == 42) {
+        kprint("Global Constructors: OK\n");
+    } else {
+        kprint("Global Constructors: FAILED\n");
+    }
     kprint("> ");
     irq_install();
 }
