@@ -19,8 +19,8 @@ uint8_t get_RTC_register(int reg) {
 }
 
 void get_time(char* time_str) {
-    uint8_t second, minute, hour, day, month, year, week;
-    uint8_t last_second, last_minute, last_hour, last_day, last_month, last_year, last_week;
+    uint8_t second = 0, minute = 0, hour = 0, day = 0, month = 0, year = 0, week = 0;
+    uint8_t last_second = 0, last_minute = 0, last_hour = 0, last_day = 0, last_month = 0, last_year = 0, last_week = 0;
     uint8_t registerB;
 
     // Wait for update finish (UIP == 0)
@@ -74,6 +74,33 @@ void get_time(char* time_str) {
     // Convert 12 hour clock to 24 hour clock check if register B is in 12 hour mode
     if (!(registerB & 0x02) && (hour & 0x80)) {
         hour = ((hour & 0x7F) + 12) % 24;
+    }
+
+    // Adjust for Taiwan Time (UTC+8)
+    hour += 8;
+    if (hour >= 24) {
+        hour -= 24;
+        day++;
+        week++;
+        if (week > 7) week = 1;
+
+        // Check for month/year rollover
+        int full_year = 2000 + year;
+        int days_in_month[] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+        
+        // Leap year check
+        if ((full_year % 4 == 0 && full_year % 100 != 0) || (full_year % 400 == 0)) {
+            days_in_month[2] = 29;
+        }
+
+        if (day > days_in_month[month]) {
+            day = 1;
+            month++;
+            if (month > 12) {
+                month = 1;
+                year++;
+            }
+        }
     }
 
     // Format: YYYY-MM-DD HH:MM:SS
