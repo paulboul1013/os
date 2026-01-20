@@ -1,5 +1,9 @@
 # os
 
+## 作業系統參考資料
+https://github.com/cfenollosa/os-tutorial/tree/master
+https://wiki.osdev.org/Expanded_Main_Page
+
 ## 待實現功能
 
 [x]tab補全  
@@ -740,224 +744,231 @@ VGA 的每個儲存格佔用 `兩個`位元組，一個用於字元，另一個�
 如果嘗試寫入螢幕範圍之外的字元？這部分將在下一節解決。
 
 
-## viedo-scroll
+## video-scroll
 
-scroll the screen when the text reaches the bottom
+當文字到達螢幕底部時捲動螢幕
 
-see `drivers/screen.c` and note that at the bottom of `print_char` there is a new section (line 84) which checks if the current offset is over the screen size and scrolls the text
+請參閱 `drivers/screen.c`，並注意到 `print_char` 的底部有一個新區段（約在第 101 行），它會檢查目前的偏移量（offset）是否超過螢幕大小，並進行文字捲動。
 
-scrolling is handled by `memory_copy`，it's simple version of standard `memcpy` but needed named it different name to avoid collsions。see `kernel/util.c` for implementation
+捲動是由 `memory_copy` 處理的，它是標準 `memcpy` 的簡化版本，但為了避免名稱衝突而取了不同的名字。實作請參閱 `libc/mem.c`（原為 `kernel/util.c`）。
 
-To help visualize scrolling，also implement a function to convert integers to text，`int_to_ascii`。this is a quick implementation of the standard function `itoa`。
+為了幫助視覺化捲動，我們還實作了一個將整數轉換為文字的函數 `int_to_ascii`。這是標準函數 `itoa` 的快速實作。
 
-notice that for integers which have double digits or more，they are printed in reverse
+請注意，兩位數以上的整數在目前的實作中已經可以正常顯示（先前版本曾有反向列印的問題）。
 
-can set a breakpooint  on line 14 on the `kernel.c`
-
-
-
-## interrupts
-
-set up the interrupt descriptor table to handle cpu interrupts
-
-### data types
-define some specila data types  in `cpu/types.h`，help uncouple data structures for raw bytes from chars and ints，must bee carefully placed on the `cpu/`，will put machine-dependent code now on。the boot code is specifically x86 and is still on `boot/`，but can leave alone for now
-
-some existing files have been  modidfied to use the new `u8`,`u16`,`u32` data types
-
-### interrupts 
-
-interrupts is one of the main point that a kernel need to handle。as soon as possble , to be able to receive keyboard。
-
-another examples of interrupts are: division by zero,out of bounds,invalid opcodes ,page faults ,etc
-
-interrupts are handled on a vector,with entries which are similar to those of the GDT ，but have other name is IDT，do it with c
-
-`cpu/idt.h` defines how an idt entry is stored `idt_gate` (there are need to be 256 of them ，if NULL，or the cpu may panic ) and the actual idt structure that the bios will load,`idt_register` which is just a memory address and size，similar to the GDT register
-
-define a couple variables to access those data structures from assebler code
-
-`cpu/idt.c` fills in every struct with a handler。can see matter of setting the struct values and calling `lidt` assembler command
-
-### ISRs
-the interrupt service routines run every time the cpu detects an interrupt which is usually fatal
-
-will write just enough code to handle，print an error message and halt the cpu
-
-on `cpu/isr.h`，define 32 of them，they are declared as `extern` because they will be implemented in assembler，in `cpu/interrupt.asm`
+可在 `kernel/kernel.c` 的第 14 行設置斷點。
 
 
-before jumping to the assembler code，check `cpu/isr.c`。can see define a function to install all isrs at once and load the idt， a list of error messages，and the high level handle which kprints some information，can customize `isr_handler` to print/do whatever you want
 
-now to the low level which glues every `idt_gate` with its low-level and high-level handler。open `cpu/interrupt.asm`。define a common low level ISR code which basically saves/restores the state and calls the C code and then the actual ISR assembler functions which are refernced on `cpu/isr.h`
 
->the `registers_t` struct is a representation of all the registers pushed in `interrupt.asm`
+## interrupts (中斷)
 
-now need to reference `cpu/interrupt.asm` from out Makefile and make the kernel install the ISRs and lauch one of them
+設置中斷描述表 (Interrupt Descriptor Table, IDT) 以處理 CPU 中斷。
 
-notice the cpu doesn't halt after some interrupts
+### 資料型別 (Data Types)
+我們在 `cpu/` 目錄下整合機器相關的程式碼，並使用明確定義大小的資料型別，這有助於將底層位元組結構與一般的字元或整數解耦。雖然早期曾使用自定義的 `u8`, `u16`, `u32` (原定義於 `cpu/types.h`)，但目前已全面改用 `<stdint.h>` 標準型別（如 `uint8_t`, `uint32_t`）以符規範。
+
+相關的開機程式碼 (boot code) 則是 x86 特有的，目前仍保留在 `boot/` 目錄中。
+
+### interrupts (中斷處理)
+
+中斷是核心必須處理的核心要點之一。我們需要儘快建立此機制，以便能夠接收鍵盤輸入。
+
+
+其他中斷範例包括：除以零 (division by zero)、越界 (out of bounds)、無效指令 (invalid opcodes)、分頁錯誤 (page faults) 等。
+
+中斷是透過一個「向量表」(vector) 來處理的，其條目與 GDT 類似，但在中斷機制中稱為 IDT (中斷描述表)。我們將使用 C 語言來實作。
+
+`cpu/idt.h` 定義了 IDT 條目的儲存方式 `idt_gate_t`（必須定義 256 個條目，如果為空，CPU 可能會發生崩潰/Panic）以及供 CPU 載入的實體 IDT 結構 `idt_register_t`。後者僅包含記憶體位址與大小，與 GDT 暫存器類似。
+
+我們定義了一些變數，以便從組合語言 (assembler) 存取這些資料結構。
+
+`cpu/idt.c` 將每個結構填入對應的處理程序 (handler)。你可以看到這涉及設定結構值並呼叫 `lidt` 組合語言指令。
+
+
+### ISRs (中斷服務常式)
+每當 CPU 偵測到中斷（通常是致命錯誤）時，就會執行中斷服務常式 (Interrupt Service Routines, ISR)。
+
+我們將編寫最精簡的處理代碼：印出一條錯誤訊息並停止 CPU。
+
+在 `cpu/isr.h` 中定義了 32 個 ISR，它們被宣告為 `extern`，因為它們將在組合語言檔案 `cpu/interrupt.asm` 中實作。
+
+在進入組合語言程式碼之前，請先查看 `cpu/isr.c`。你可以看到這裡定義了一個函式來一次安裝所有 ISR 並載入 IDT、一份錯誤訊息列表，以及顯示資訊的高階處理程序 (high level handler)。你可以根據需求自訂 `isr_handler` 以印出或執行任何操作。
+
+接著是低階部分，它將每個 `idt_gate` 與其對應的低階和高階處理程序連結起來。打開 `cpu/interrupt.asm`，我們定義了一段通用的低階 ISR 程式碼，主要負責儲存/還原狀態並呼叫 C 語言代碼，以及在 `cpu/isr.h` 中引用的實際 ISR 組合語言函式。
+
+> `registers_t` 結構是 `interrupt.asm` 中推入堆疊的所有暫存器的表現形式。
+
+現在需要在我們的 `Makefile` 中引用 `cpu/interrupt.asm`，並讓核心安裝 ISR 並啟動其中一個進行測試。
+
+請注意，目前有些中斷觸發後 CPU 並不會停止（halt）。
+
  
-## interrupts-irqs
+### interrupts-irqs (中斷-IRQ)
 
-finish the interrupts implemenataion and cpu timer
 
-when the cpu boots,the pic maps IRQs 0-7 to INT 0x8-0xF and IRQs 8-15 to  INT 0x70-0x77
+當 CPU 啟動時，可程式化中斷控制器 (PIC) 預設將 IRQ 0-7 映射到 INT 0x8-0xF，將 IRQ 8-15 映射到 INT 0x70-0x77。
 
-sinece programmed ISRs 0-31,it's standard to remap IRQs to ISRs 32-47
+由於我們已經編寫了 ISR 0-31 來處理 CPU 異常，因此標準做法是將 IRQ 重新映射到 ISR 32-47。
 
-the PICs are communicated with via I/O ports，the master pic has command 0x20 and data 0x21，while the slave has command 0XA0 and data0XA1
+我們透過 I/O 埠與 PIC 通訊：主 (Master) PIC 的命令埠為 `0x20`，資料埠為 `0x21`；從 (Slave) PIC 的命令埠為 `0xA0`，資料埠為 `0xA1`。
 
-code for remapping the PICs is weired and includes some masks，check https://wiki.osdev.org/8259_PIC，otherwise look `cpu/isr.c` ，new code after we set the IDT gates for the ISRs ，after that，add the IDT gates for IRQs
+重新映射 PIC 的代碼較為特殊且包含一些掩碼 (masks)，詳情可以參考 [OSDev Wiki](https://wiki.osdev.org/8259_PIC)，或者查看 `cpu/isr.c`：在設定完異常處理的 IDT 門 (gates) 之後，緊接著就是 IRQ 的 IDT 門設定。
 
-jump to assembler，at `interrupt.asm`，the first task is to add global definitions for the IRQ symbols just used in the C code，look at the end of the `global` statements
+跳轉到組合語言部分，在 `interrupt.asm` 中，第一個任務是為 C 代碼中使用的 IRQ 符號新增全域定義（請見 `global` 語句的末尾）。
 
-The add the IRQ handlers，same `interrupt.asm` at the bottom，notice how to jumpy to a new common stub:`irq_common_stub`
+接著在 `interrupt.asm` 的底部新增 IRQ 處理程序，注意到它們會跳轉到一個新的通用 stub：`irq_common_stub`。
 
-and then create this `irq_common_stub` which is very similar to the ISR one。It is located at the top of `interrupt.asm` andit also defines a new `[extern irq_handler]`
+然後建立這個 `irq_common_stub`，它與 ISR 的版本非常相似。它位於 `interrupt.asm` 的頂部，並宣告了一個新的 `[extern irq_handler]`。
 
-back to c code，to write the `irq_handler()` in `isr.c`，it sent some EOIs to the PICs and calls the handler which is stored in an arary named `interrupt_handlers` and defined at the top of the file。The new structs are defined in `isr.h`，also use a simple function to register the interrupt handlers
+回到 C 程式碼，在 `isr.c` 中編寫 `irq_handler()`：它負責向 PIC 發送中斷結束訊號 (EOI)，並呼叫儲存在 `interrupt_handlers` 陣列（定義於檔案頂部）中的處理程序。相關結構定義在 `isr.h` 中，我們還使用了一個簡單的函式來註冊中斷處理程序。
 
-we can define our first IRQ handler
+現在我們可以定義第一個 IRQ 處理程序了。
 
-no changes in `kernel.c` this time
+本次 `kernel.c` 不需要任何變更。
+
 
 ## interrupts-timer
 
-concept:
-1. cpu timer:is master board or internal cpu 's hard component，it make a signal with same frequency
+基本概念：
+1. CPU 計時器（CPU Timer）：是主機板或 CPU 內部的硬體組件，能以固定頻率產生訊號。
 
-2.keyboard interrupts:interrupt is hardware tells cpu that it's emergcy situation，stop the task right now，deal another task first。
+2. 鍵盤中斷（Keyboard Interrupts）：中斷是硬體用來告知 CPU 發生了緊急情況，需立即停止當前任務並優先處理另一項任務的機制。
 
-3. scancode is the keyboard hardware sent to computer the raw data
+3. 掃描碼（Scancode）：這是鍵盤硬體傳送到電腦的原始數據。
 
-implement  first IRQ handlers: the cpu timer and the keyboard
+實作首批 IRQ 處理程序：CPU 計時器與鍵盤。
 
 
-### Timer
+### Timer (計時器)
 
-timer is easy to setting。first declare an `init_timer()` on `cpu/timer.h` and implement it on `cpu/timer.c`。a matter of computing the clock frequency and sending the bytes to the appropriate ports
+計時器的設定非常簡單。首先在 `cpu/timer.h` 宣告 `init_timer()` 並在 `cpu/timer.c` 實作。這主要涉及計算時鐘頻率並將位元組發送到對應的埠口。
 
-now fix `kernel/utils.c` int_to_ascii() to print the numbers in the correct order。need to implement `reverse()` and `strlen()`
+接著修正 `libc/string.c`（原為 `kernel/utils.c`）中的 `int_to_ascii()`，使其能按正確順序印出數字。為此我們需要實作 `reverse()` 與 `strlen()`。
 
-go back to the `kernel/kernel.c` and do two things。enable interrupts again and the initialize the timer interrupt 
+回到 `kernel/kernel.c` 執行兩件事：重新啟用中斷（在 `irq_install` 中執行）並初始化計時器中斷。
 
-`make run` and will see the clock ticking
+執行 `make run` 即可看到時鐘跳動（若處理程序中有印出訊息）。
+
 
 ## keyboard
 
-keyboard setting is very easy，with a drawback，The PIC does not send us the ascii code for the pressed key，but the scancode for the key-press and the key-up events，so will need to translate those
+鍵盤設定非常簡單，但有一個缺點：PIC 傳送的不是按鍵的 ASCII 碼，而是按鍵（key-press）與放開（key-up）事件的掃描碼（scancode），因此我們需要進行轉換。
 
-check `drivers/keyboard.c` where there are two function，the callback and the initialization which setting the interrupt callback。A new `keyboard.h` created with the definitons
+請參閱 `drivers/keyboard.c`，其中包含兩個函式：回呼函式（callback）與設定中斷回呼的初始化函式。同時也建立了包含相關定義的 `keyboard.h`。
 
-`keyboad.c` have a long table to translate scancodes to ASCII keys。for the time being we will only implement a simple subset of the US keyboard，can read more https://aeb.win.tue.nl/linux/kbd/scancodes-1.html
+`keyboard.c` 中有一張長表用於將掃描碼轉換為 ASCII 碼。目前我們僅實作了美式鍵盤（US keyboard）的一個簡單子集，詳細資訊請參閱 [鍵盤掃描碼參考資料](https://aeb.win.tue.nl/linux/kbd/scancodes-1.html)。
+
 
 ## shell
 
-clean the code and parse user input
+先整理程式碼，再解析使用者輸入。
 
-first clean up the code a bit，try to put things in the most predictable places，it's good exeercise to know when the code is growing  and adapit it to current and furture needs
+首先稍微清理一下程式碼，嘗試將各個程式模組放在最合理且易於預期的位置。這是一個很好的練習，能讓我們覺察程式碼何時開始過度增長，並調整架構以適應當前與未來的需求。
+
 
 ### code cleaning
 
-will quickly start to need more utility functions for handling strings and others，in a normal os，it's called c library or libc。
+我們很快就會需要更多處理字串及其他功能的工具函式，在標準的作業系統中，這被稱為 C 函式庫或 libc。
 
-now have a `utils.c` which will split into `mem.c` and `string.c`，whih their respective headers
+現在我們將原本的 `utils.c` 拆分為 `mem.c` 與 `string.c`（位於 `libc/` 目錄下），並附帶各自的標頭檔。
 
-second，will create a new function `irq_install()` that the kernel only needs to perform one call t oinitilize all the IRQs，that function is `isr_install()` and placed on the `isr.c` ，here will disable the `kprint()` on `timer_callback()`  to avoid filling the screen wiht message，now we know that it works
+其次，我們建立了一個新的函式 `irq_install()`，讓核心只需呼叫一次即可初始化所有 IRQ。相對應地，初始化異常處理的函式為 `isr_install()`，兩者皆位於 `isr.c`。在此階段，我們會停用 `timer_callback()` 中的 `kprint()` 訊息，以避免時鐘跳動訊息填滿螢幕。
 
-there is not a clear distinction between `cpu/` and `drivers/`，will distinct later，The only change will do for now is to move `drivers/ports.*` into `cpu/` since it's clearly cpu-dependent code。`boot/` is also cpu-dependent code，but we will not mess with it until we implement the boot sequence for a different machine。
+目前 `cpu/` 與 `drivers/` 之間的劃分尚不完全明確，日後會再優化。目前的變動是將 `drivers/ports.*` 移入 `cpu/`，因為埠口操作顯然屬於 CPU 相關代碼。`boot/` 同樣也屬於 CPU 相關代碼，但除非未來要支援其他硬體架構，否則暫不更動。
 
-there are more sswitches for the `CFLAGS` on the `Makefile`，because will now start creating higher-level functions for our C library and don't want the compiler to include any external code if we make a mistake with a declaration 。also added some flags to turn warnings into errors，since an apparently minor mistake converting pointers can blow up lateron。this also forced us to modify some misc point declarations in our code
+`Makefile` 中的 `CFLAGS` 增加了更多編譯旗標。這是因為我們開始撰寫高階函式，不希望編譯器在處理宣告時引入任何外部連結。我們也加入了將警告視為錯誤的設定，因為指標轉型上的微小失誤往往是後續嚴重錯誤的根源，這也促使我們修正了程式碼中一些不嚴謹的指標宣告。
 
-finall，will add a marco to avoid warning-errors on unused parameters on `libc/function.h`
+最後，我們在 `libc/function.h` 中加入了一個宏 (macro)，用於消除編譯器針對「未使用參數」產生的警告錯誤。
+
 
 ### keyboard characters
 
-how to access the typed characters
+如何存取鍵盤輸入的字元：
 
-when a key is pressed，the callback gets the ASCII code via a new arrays which are definied at the beginnig of `keyboard.c`
+當按鍵被按下時，回呼函式（callback）會透過 `keyboard.c` 開頭定義的新陣列（如 `sc_ascii`）獲取對應的 ASCII 碼。
 
-the callback then appends that character to buffer，`key_buffer`
+隨後，回呼函式會將該字元追加到緩衝區 `key_buffer` 中。
 
-it's also printed on the screen
+該字元也會同步顯示在螢幕上。
 
-when the os wants to read user input,it calls `libc/io.c:readline()`
+當使用者按下回車鍵（Enter）時，系統會呼叫核心函式 `user_input(key_buffer)` 來處理輸入內容。
 
-`keyboard.c` parses backspace，by removing the last element of the key buffer and deleting it from the screen by calling `screen.c:kprint_backspace()`。we neededto modify a bit `print_char()` to not advance the offset when print a backspace
+`keyboard.c` 處理退格鍵（Backspace）的方式是刪除 `key_buffer` 中的最後一個字元，並透過重新顯示輸入行來更新螢幕（這涉及呼叫 `screen.c:kprint_backspace()`）。我們也對 `print_char()` 進行了微調，使其在遇到退格符號（0x08）時不會增加偏移量（offset）。
+
 
 
 ### responding to user input
 
-the keyboard callback checks for a newline，and calls the kernel，tell it the uesr have to input something，our final libc function is `strcmp()` ，compare input string ，if user input `END` ，halt the cpu
+鍵盤回呼函式（callback）會檢查換行符號，並呼叫核心告知使用者已完成了輸入。我們最後一個 libc 函式是 `strcmp()`，用於比較輸入字串。如果使用者輸入 `end`，則停止 CPU 運行。
 
 ## malloc
 
-implement a memory allocator
+實作記憶體分配器。
 
-add kernel memory allocatro `libc/mem.c` implement as a simple pointer to free memory which keeps growing
+在 `libc/mem.c` 中加入核心記憶體分配器。其實作方式為一個指向可用記憶體的簡單指標，該指標會隨著分配不斷增長。
 
-The `kmalloc()` function can be used to request an aligned page and it also  return the real physical address for later use
+`kmalloc()` 函式可用於請求對齊的分頁（aligned page），並且它也會回傳用於後續用途的實體位址。
 
-change the `kernel.c` leaving all the shell code，just try out the `kmalloc()` and check out first page starts at 0x10000 (as hardcoded on `mem.c`) and subsequent `kmalloc()`'s produce a new address which is aligned 4096 bytes or 0x10000 from the previous one
+修改 `kernel.c`，保留所有 Shell 相關程式碼，僅加入對 `kmalloc()` 的測試。確認第一頁是從 `0x10000` 開始（此處在 `mem.c` 中為硬編碼），隨後的 `kmalloc()` 呼叫會產生新的位址，且該位址與前一個位址對齊 4096 位元組（或 `0x1000`）。
 
-note added a new strings.c:`hex_to_ascii()` for  printing fo hex numbers
+注意：在 `libc/string.c` 中新增了 `hex_to_ascii()` 函式，用於印出十六進位數字。
 
-simple revise rename `types.h` to `type.h` for language  consistency
+簡單修正：為了語言一致性，將 `types.h` 重新命名為 `type.h`。
 
 
 ## fixes
 
-fix miscellaneous issues 
+修正雜項問題
 
-osdev wiki has a section https://wiki.osdev.org/James_Molloy%27s_Tutorial_Known_Bugs。since followed tutorial (interrupts to malloc) need to make sure fix issues
+OSDev Wiki 有一個頁面 [James Molloy's Tutorial Known Bugs](https://wiki.osdev.org/James_Molloy%27s_Tutorial_Known_Bugs)。由於我們遵循了該教學（從中斷到 malloc），因此需要確保修正以下問題：
 
-1. wrong CFLAGS
+### 1. 錯誤的 CFLAGS
+在編譯 `.o` 檔案（包括 `kernel_entry.o`、`kernel.bin` 和 `os-image.bin` 相關物件）時，加入 `-ffreestanding` 旗標。
 
-add `-ffreestanding ` when compile `.o` files which includes `kernel_entry.o` and `kernel.bin` and `os-image.bin`
+先前我們透過 `-nostdlib` 停用了 `libgcc`（注意不是 `libc`），但在連結時沒有重新啟用它，這會變得很棘手。因此我們在目前版本中調整了參數，確保正確連結必要的獨立程式庫。
 
-before disabled libgcc(not libc) through the use of `-nostdlib` and didn't re-enable it for linking.since it's tricky 。will delete `-nostdlib`
+同時也向 gcc 傳遞了 `-nostdinc`。
 
-`-nostdinc` also passed to gcc 
+### 2. kernel.c 的 `main()` 函式
+修改 `kernel/kernel.c`，將 `main()` 改名為 `kernel_main()`，因為 gcc 將 `main` 視為特殊關鍵字，我們不應直接操作它。
 
-2. kernel.c `main()` function
-modify `kernel/kernel.c` and change `main()` to `kernel_main()` since gcc recoginzes `main` as a speical keyword and don't mess with that
+相應地修改 `boot/kernel_entry.asm` 以指向新名稱。
 
-change `boot/kernel_entry.asm` to point to the new name accordingly
+修正 `i386-elf-ld: warning: cannot find entry symbol _start; defaulting to 0000000000001000` 警告訊息：在 `boot/kernel_entry.asm` 中加入 `global _start;` 並定義 `_start:` 標籤。
 
-fix the `i386-elf-ld: warning: cannot find entry symbol _start; defaulting to 0000000000001000 warning` message，add a `global _start;` and define the _start: label in `boot/kernel_entry.asm`
+### 3. 重塑資料型別
+定義非標準資料型別（如 `u32` 等）並非好主意，因為 C99 引入了標準的固定寬度資料型別（如 `uint32_t`）。
 
+我們改為引入 `<stdint.h>`，這在 `-ffreestanding` 模式下依然有效（但需要環境支援），使用標準型別取代自定義型別，並刪除 `type.h`。
 
-3. reivented datatypes
+同時刪除不必要的 `__asm__` 和 `__volatile__` 關鍵字（除非確實需要）。
 
-it's a bad idea to define non-standard data types like `u32` and such，since C99 introdcues standard fixed-width data types like `uint32_t`
+### 4. `kmalloc` 對齊與型別問題
+由於 `kmalloc` 使用大小參數，應使用正確的資料型別 `size_t` 取代 `u32int_t`（或 `uint32_t`）。所有相關參數都應統一使用 `size_t`。
 
-need to include `<stdint.h>` works even in `-ffreestanding` (but requires stdlibs) and use those data types instead of our own and then delte `type.h`
+### 5. 缺失的函式
+實作缺失的 `mem*` 系列函式（如 `memory_copy`、`memory_set`）。
 
-also delete the `__asm__` and `__volatile__` since they aren't needed
+### 6. 中斷處理程序 (Interrupt Handlers)
+`cli` 指令是多餘的，因為如果 IDT 條目（`idt_gate_t`）的標誌設定正確，中斷會在進入處理程序時自動禁用。
 
-4. Improperly aligned `kmalloc`
+`sti` 也是多餘的，因為 `iret` 指令會從堆疊中彈出其儲存的 `EFLAGS` 值，其中包含了中斷是否開啟的位元。換句話說，中斷處理程序會自動恢復到中斷發生前的狀態（無論之前是否啟用了中斷）。
 
-because `kamlloc` uses a size parameter，use the correct data type，`size_t` instead of `u32int_t`，`size_t` should be used for all parameters
+在 `cpu/isr.h` 中，`struct registers_t` 有多處問題。首先，原本的 `esp` 被重新命名為 `useless`，因為該值反映的是當前的堆疊上下文，而非被中斷時的狀態。因此我們將原有的 `useresp` 重新命名為 `esp`。
 
-5. missing function
-implement the missing `mem*` function
+根據 OSDev Wiki 的建議，在 `cpu/interrupt.asm` 呼叫 `isr_handler` 之前加入 `cld` 指令。
 
-6. interrupt handlers
-`cli` is redundant because already established on the IDT entriess if interrrupts are enabled within a handler using the `idt_gate_t` flags
+`cpu/interrupt.asm` 的另一個重要修正：通用的 stub 會在堆疊上建立 `struct registers_t` 的實體並呼叫 C 處理程序。但這違反了 ABI 規範，因為堆疊空間屬於被呼叫函式，它們可以隨意更改其值。我們必須以指標（pointer）的形式傳遞該結構。
 
-`sti` also，as `iret` loads eflags value form the stack，contains a bit telling whether interrupts are on or off，In other words interrupt handler automatically restores interrupts whether or not interrupts were enabled before this interrupt
+實作方法：
+1. 修改 `cpu/isr.h` 和 `cpu/isr.c`，將 `registers_t r` 改為 `registers_t *t`。
+2. 將結構欄位的存取方式從 `.` 改為 `->`。
+3. 在 `cpu/interrupt.asm` 呼叫 `isr_handler` 和 `irq_handler` 之前加入 `push esp`（推入結構位址）。
+4. 呼叫結束後記得 `pop eax` 以清理該指標。
 
-on `cpu/isr.h`，`struct registers_t` have many issues。first is alledged `esp` is renamed to `useless` 。the value is useless because it has to to do with the current stack context，not what was interrupted。so rename `useresp` to `esp`
+目前所有的回呼函式（如計時器和鍵盤）也都需要修改為使用 `registers_t` 指標。
 
-add `cld ` just before `call isr_handler` on `cpu/interrupt.asm` as suggested by the osdev wiki
-
-important issuse with `cpu/interrupt.asm` as suggested by the osdev wiki
-
-final important issue with `cpu/interrupt.asm`。The common stubs create an instance of `struct registers` on the stack and then call the C handler ，but that break the ABI since the stack belongs to the called function and they may change them as they please。need to pass the struct as a pointer
-
-to achieve this ，edit `cpu/isr.h` and `cpu/isr.c` and change `registers_t r` into `registers_t *t` then instead of accessing the fields of the struct via `.` access the field of the pointer via `->` finally in the `cpu/interrupt.asm` and add a `push esp` before calling both `isr_handler` and `irq_handler`。remember to also `pop eax` to clear the pointer afterwards。
-
-both current callbacks ，the timer and the keyboard also need to be change to use a pointer to `register_t`
 
 ## 更新cross-compiler版本
 
