@@ -17,6 +17,7 @@ https://wiki.osdev.org/Expanded_Main_Page
 []設計檔案系統結構（FAT12/簡化版）  
 [x]Calling Global Constructors
 [x]printf相關函式
+[]SSP進階優化:多執行緒與 TLS
 
 ## 細節修改
 time:已修正為顯示台灣時區
@@ -1092,4 +1093,44 @@ PC 喇叭的物理連通受 **System Control Port B (0x61)** 控制：
 ### 參考資料
 https://wiki.osdev.org/Programmable_Interval_Timer
 
+##  Stack Smashing Protector
+核心目的是防止攻擊者透過溢位局部變數（通常是陣列），來覆蓋函數在堆疊上的回傳位址（Return Address）。如果回傳位址被篡改，攻擊者就可以控制程式跳轉到惡意代碼（如 Shellcode）
 
+SSP 僅能「偵測」堆疊緩衝區溢位，而非「防止」其發生。
+
+
+### 金絲雀（Canary）機制
+1. 放置金絲雀（Guard Value）：當函數開始執行時，編譯器會在堆疊上的「局部變數」與「回傳位址」之間插入一個隨機的數值，這個值被稱為 Canary（金絲雀）。
+2. 執行函數：函數正常執行其邏輯。
+3. 檢查金絲雀：在函數準備 ret（回傳）之前，編譯器會插入一段代碼，檢查堆疊上的那個 Canary 值是否仍與原始值一致。
+4. 觸發報警：
+    * 如果值未變，說明沒有發生溢位（或者溢位沒碰到 Canary），函數正常回傳。
+    * 如果值改變了，說明發生了堆疊溢位（Stack Smashing），此時程式會立即跳轉到一個錯誤處理函數（通常是 __stack_chk_fail），終止程式或讓核心當機（Panic）。
+
+### 編譯器選項
+- -fstack-protector:使用超過 8 位元組的 char 陣列，或是動態分配的記憶體（使用 malloc 等）
+- -fstack-protector-all:強制為所有函數加上保護和檢查canary值
+- -fstack-protector-strong:在stack-protector基礎上，加入本地數組或是union內含陣列、 若 local 變數位址用來賦值或者當作函式參數、以 register 類型宣告的 local 變數。
+- -fstack-protector-explicit:只對以 __attribute__((stack_protect)) 宣告的 function 加入以及檢查 canary 值
+>e.g.  __attribute__((stack_protect)) void test() {}
+- fno-stack-protector:禁用 stack protector
+
+### 實作細節
+
+1. 全域變數：`__stack_chk_guard`
+- 定義一個全域變數:`uintptr_t __stack_chk_guard`，用於儲存金絲雀值。
+- 初始化：在核心初始化早期（例如 kmain），你應該賦予它一個隨機值
+- 安全性注意：如果這個值永遠是固定的（例如 0x00000000），攻擊者只要猜到這個值，就可- 以在溢位時填入相同的數值來繞過檢測。
+
+2. 報警函數：__stack_chk_fail
+- 當檢測到金絲雀被改變時，編譯器產生的代碼會呼叫這個函數。
+- 原型：void __stack_chk_fail(void);
+- 實作內容：在核心環境中，這通常會觸發一個 Kernel Panic。因為堆疊已經毀損，系統已處於不安全狀態，繼續執行可能會導致更嚴重的災難。
+- 注意：這個函數絕對不能回傳（應該標記為 [[noreturn]] 或 __attribute__((noreturn))），且不應再嘗試使用複雜的堆疊操作。
+
+### 進階優化:多執行緒與 TLS
+在更進階的系統中（例如支援多執行緒的核心），每個執行緒（Thread）可能需要不同的 Canary 值，以防止某個執行緒的洩漏導致全域 Canary 被破解。這通常透過 TLS (Thread Local Storage) 實作，編譯器會根據目標架構（如 x86 的 gs 或 fs 暫存器）來讀取 Canary。
+
+### 參考資料
+https://wiki.osdev.org/Stack_Smashing_Protector
+https://szlin.me/2017/12/09/stack-buffer-overflow-stack-canaries/
