@@ -15,7 +15,26 @@ __attribute__((constructor)) void test_constructor() {
     constructor_test_val = 42;
 }
 
+// 強制不進行內聯，確保函式有自己的 Call Stack 和 Return Address
+__attribute__((noinline))
+void trigger_overflow() {
+    char buffer[10];
+    int i = 0;
+    kprint("Writing beyond buffer limits...\n");
+    // 寫入遠超緩衝區的大小 (64 bytes)，確保能蓋過 Canary 和 Return Address
+    while (i < 64) {
+        buffer[i] = 'A';
+        i++;
+    }
+    // 到這裡通常已經毀壞堆疊了，如果有觸發 SSP，函式回傳時會跳轉到 __stack_chk_fail
+}
+
+extern uintptr_t __stack_chk_guard;
+
 void kernel_main(){
+    // simple "randomness" by mixing some bits (could be improved)
+    __stack_chk_guard = __stack_chk_guard ^ (uintptr_t)&kernel_main;
+    
     isr_install();
     mem_init();
     if (constructor_test_val == 42) {
@@ -82,6 +101,10 @@ void user_input(char *input){
         printf("Hex: 0x%x\n", 0xDEADBEEF);
         printf("Percent: %%\n");
         kprint("> ");
+    }else if (strcmp(input, "stack") == 0) {
+        kprint("Starting stack smashing test...\n");
+        trigger_overflow();
+        kprint("Should not reach here if SSP works!\n> ");
     }
     else{
         kprint("> ");
