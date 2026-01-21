@@ -15,8 +15,8 @@ CC= /usr/local/i386elfgcc/bin/i386-elf-gcc
 LD= /usr/local/i386elfgcc/bin/i386-elf-ld
 GDB = /usr/bin/gdb
 
-# 編譯選項 (-g 為除錯資訊，-ffreestanding 為獨立編譯，-Wall -Wextra 為警告，-fno-exceptions 禁用異常處理機制，-m32 為32位元模式)
-CFLAGS = -g -ffreestanding -Wall -Wextra -fno-exceptions -m32
+# 編譯選項 (-g 為除錯資訊，-ffreestanding 為獨立編譯，-Wall -Wextra 為警告，-fno-exceptions 禁用異常處理機制，-m32 為32位元模式, -fstack-protector-strong 啟用完全堆疊保護)
+CFLAGS = -g -ffreestanding -Wall -Wextra -fno-exceptions -m32 -fstack-protector-strong
 
 
 # 組合開機磁區與核心，製作作業系統映像檔
