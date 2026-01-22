@@ -8,7 +8,7 @@ isr_common_stub:
     pusha; push edi,esi,ebp,esp,ebx,edx,ecx,eax
     mov ax, ds; lower 16-bits of eax = ds
     push eax ;save the data segment descriptor
-    mov ax,10 ; kernel data segment descriptor
+    mov ax, 0x10 ; kernel data segment descriptor (Fixed: was 10 decimal)
     mov ds,ax
     mov es,ax
     mov fs,ax
@@ -21,15 +21,16 @@ isr_common_stub:
     call isr_handler
 
     ;3.restore state
-    pop eax
-    pop eax
-    mov dx,ax
+    pop eax ; pops the esp pointer (not used)
+    pop eax ; pops the original ds
+    mov ds,ax 
     mov es,ax
     mov fs,ax
     mov gs,ax
     popa
     add esp,8 ; cleanup up the pushed error code and pushed ISR number
     iret; pop 5 things at once: CS ,EIP,EFLAGS ,SS , and ESP
+
 
 
 ;Common IRQ code。identical to ISR code except for the call and the pop ebx

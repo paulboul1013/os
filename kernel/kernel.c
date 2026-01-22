@@ -7,7 +7,11 @@
 #include "../libc/stdio.h"
 #include "../drivers/rtc.h"
 #include "../cpu/timer.h"
+#include "../cpu/pmm.h"
+#include "../cpu/paging.h"
 #include <stdint.h>
+
+
 
 int constructor_test_val = 0;
 
@@ -19,7 +23,9 @@ __attribute__((constructor)) void test_constructor() {
 __attribute__((noinline))
 void trigger_overflow() {
     char buffer[10];
+    (void)buffer;
     int i = 0;
+
     kprint("Writing beyond buffer limits...\n");
     // 寫入遠超緩衝區的大小 (64 bytes)，確保能蓋過 Canary 和 Return Address
     while (i < 64) {
@@ -36,8 +42,19 @@ void kernel_main(){
     __stack_chk_guard = __stack_chk_guard ^ (uintptr_t)&kernel_main;
     
     isr_install();
+    
+    // 初始化 PMM (假設 128MB)
+    pmm_init(128 * 1024 * 1024);
+    // 保留內核佔用的內存 (1MB 內的安全區)
+    pmm_reserve_region(0, 0x100000); 
+    
     mem_init();
+    
+    // 初始化分頁
+    init_paging();
+
     if (constructor_test_val == 42) {
+
         kprint("Global Constructors: OK\n");
     } else {
         kprint("Global Constructors: FAILED\n");
@@ -105,7 +122,24 @@ void user_input(char *input){
         kprint("Starting stack smashing test...\n");
         trigger_overflow();
         kprint("Should not reach here if SSP works!\n> ");
+    }else if (strcmp(input, "pmm") == 0) {
+        uint32_t f1 = pmm_alloc_frame();
+        uint32_t f2 = pmm_alloc_frame();
+        printf("Allocated frame 1: 0x%x\n", f1);
+        printf("Allocated frame 2: 0x%x\n", f2);
+        pmm_free_frame(f1);
+        uint32_t f3 = pmm_alloc_frame();
+        printf("Re-allocated frame (should be same as f1): 0x%x\n", f3);
+        kprint("> ");
+    }else if (strcmp(input, "paging") == 0) {
+        kprint("Testing paging: accessing 0x5000000 (unmapped)...\n");
+        uint32_t *ptr = (uint32_t*)0x5000000;
+        uint32_t val = *ptr;
+        printf("Value: 0x%x (Should have faulted!)\n", val);
+        kprint("> ");
     }
+
+
     else{
         kprint("> ");
     }
