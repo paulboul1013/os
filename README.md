@@ -6,18 +6,21 @@ https://wiki.osdev.org/Expanded_Main_Page
 
 ## 待實現功能
 
-[x]tab補全  
-[x]命令歷史記錄(上下鍵瀏覽) 
-[x]CLEAR：清空螢幕  
+[x]tab補全
+[x]命令歷史記錄(上下鍵瀏覽)
+[x]CLEAR：清空螢幕
 [x]TIME：顯示系統時間
-[x]ECHO：回顯文字  
-[x]CALC：簡單計算器  
-[]分頁機制(Paging)   
-[x]實作 kfree()（釋放記憶體）  
-[]設計檔案系統結構（FAT12/簡化版）  
+[x]ECHO：回顯文字
+[x]CALC：簡單計算器
+[x]分頁機制(Paging)
+[x]實作 kfree()（釋放記憶體）
+[]設計檔案系統結構（FAT12/簡化版）
 [x]Calling Global Constructors
 [x]printf相關函式
+[x]多工處理(Multitasking) - PCB、Context Switch、Round-Robin Scheduler
 []SSP進階優化:多執行緒與 TLS
+[]System Calls (int 0x80)
+[]User Mode (Ring 3)
 
 ## 細節修改
 time:已修正為顯示台灣時區
@@ -1134,3 +1137,733 @@ SSP 僅能「偵測」堆疊緩衝區溢位，而非「防止」其發生。
 ### 參考資料
 https://wiki.osdev.org/Stack_Smashing_Protector
 https://szlin.me/2017/12/09/stack-buffer-overflow-stack-canaries/
+
+## Multitasking (多工處理)
+
+實作核心級多工處理，讓作業系統可以同時執行多個任務，並透過 Timer 中斷進行搶佔式排程 (Preemptive Scheduling)。
+
+### 核心概念
+
+多工處理的本質是讓 CPU 在多個任務之間快速切換，造成「同時執行」的錯覺。要實現這個功能，需要以下幾個關鍵組件：
+
+1. **Process Control Block (PCB)**: 儲存每個任務的狀態資訊
+2. **Context Switch**: 保存當前任務狀態，恢復下一個任務狀態
+3. **Scheduler**: 決定下一個要執行的任務
+4. **TSS (Task State Segment)**: x86 硬體支援的任務狀態結構
+5. **Timer Interrupt**: 提供搶佔式排程的時機
+
+---
+
+### Process Control Block (PCB)
+
+PCB 是作業系統用來追蹤每個任務資訊的資料結構。每個任務都有一個對應的 PCB。
+
+#### 任務狀態 (Task States)
+
+```c
+// 定義於 cpu/task.h
+typedef enum {
+    TASK_READY,       // 就緒：等待 CPU 時間
+    TASK_RUNNING,     // 執行中：目前正在 CPU 上執行
+    TASK_BLOCKED,     // 阻塞：等待 I/O 或其他事件（未來使用）
+    TASK_TERMINATED   // 終止：任務已結束
+} task_state_t;
+```
+
+#### PCB 結構
+
+```c
+// 定義於 cpu/task.h
+typedef struct pcb {
+    uint32_t pid;                    // 進程識別碼 (Process ID)
+    task_state_t state;              // 當前狀態
+    uint32_t esp;                    // 保存的堆疊指標
+    uint32_t kernel_stack;           // 核心堆疊基底位址
+    uint32_t kernel_stack_top;       // 核心堆疊頂端
+    void (*entry_point)(void);       // 任務進入點函數
+    struct pcb *next;                // 鏈結串列指標（用於排程）
+} pcb_t;
+```
+
+**欄位說明：**
+- `pid`: 每個任務的唯一識別碼
+- `state`: 追蹤任務當前的執行狀態
+- `esp`: Context Switch 時保存的堆疊指標，指向保存的暫存器
+- `kernel_stack`: 由 `kmalloc()` 分配的堆疊記憶體基底
+- `kernel_stack_top`: 堆疊頂端（高位址，因為堆疊向下生長）
+- `entry_point`: 任務開始執行的函數位址
+- `next`: 用於建立任務的鏈結串列
+
+---
+
+### Context Switch (上下文切換)
+
+Context Switch 是多工處理的核心機制。當 Scheduler 決定切換任務時，必須：
+
+1. 保存當前任務的 CPU 暫存器到其堆疊
+2. 保存當前堆疊指標到 PCB
+3. 載入新任務的堆疊指標
+4. 從新任務的堆疊恢復 CPU 暫存器
+5. 返回到新任務的執行位置
+
+#### x86 呼叫慣例 (Calling Convention)
+
+在 cdecl 呼叫慣例中：
+- **Caller-saved registers**: `EAX`, `ECX`, `EDX` - 呼叫者負責保存
+- **Callee-saved registers**: `EBX`, `ESI`, `EDI`, `EBP` - 被呼叫者負責保存
+
+Context Switch 只需要保存 callee-saved registers，因為 caller-saved registers 已經被編譯器處理。
+
+#### 組合語言實作
+
+```asm
+; 定義於 cpu/context_switch.asm
+; void context_switch(uint32_t *old_esp, uint32_t new_esp)
+;
+; 參數：
+;   old_esp: 指向舊任務 PCB 中 esp 欄位的指標
+;   new_esp: 新任務保存的堆疊指標值
+
+global context_switch
+context_switch:
+    ; === 保存當前任務的上下文 ===
+
+    ; 保存 callee-saved registers
+    push ebp
+    push ebx
+    push esi
+    push edi
+    pushf                       ; 保存 EFLAGS（包含中斷旗標）
+
+    ; 取得 old_esp 指標並保存當前 ESP
+    ; 堆疊配置：5 次 push (20 bytes) + return address (4 bytes) = 24 bytes
+    mov eax, [esp + 24]         ; eax = old_esp 指標
+    mov [eax], esp              ; *old_esp = 當前 ESP
+
+    ; === 切換到新任務 ===
+
+    ; 載入新的堆疊指標
+    mov eax, [esp + 28]         ; eax = new_esp
+    mov esp, eax                ; ESP = new_esp
+
+    ; === 恢復新任務的上下文 ===
+
+    popf                        ; 恢復 EFLAGS
+    pop edi
+    pop esi
+    pop ebx
+    pop ebp
+
+    ret                         ; 返回到新任務（從新堆疊彈出 EIP）
+```
+
+#### 堆疊配置圖
+
+當 `context_switch` 保存完畢後，堆疊配置如下：
+
+```
+高位址
++------------------+
+|   Return Addr    | <- 由 call 指令推入
++------------------+
+|       EBP        | <- push ebp
++------------------+
+|       EBX        | <- push ebx
++------------------+
+|       ESI        | <- push esi
++------------------+
+|       EDI        | <- push edi
++------------------+
+|      EFLAGS      | <- pushf
++------------------+ <- ESP (保存到 PCB)
+低位址
+```
+
+#### 新任務的初始堆疊
+
+創建新任務時，必須設置堆疊使其看起來像是被 `context_switch` 中斷的樣子：
+
+```c
+// 定義於 cpu/task.c - task_create() 函數
+
+uint32_t *sp = (uint32_t*)stack_top;
+
+// Return address - context_switch 的 ret 會跳到這裡
+*--sp = (uint32_t)entry;    // 任務進入點
+
+// 保存的暫存器（將被 context_switch 彈出）
+*--sp = 0;      // EBP
+*--sp = 0;      // EBX
+*--sp = 0;      // ESI
+*--sp = 0;      // EDI
+*--sp = 0x202;  // EFLAGS: IF=1 (中斷啟用), 保留位元 1
+
+task->esp = (uint32_t)sp;
+```
+
+---
+
+### Scheduler (排程器)
+
+排程器負責決定哪個任務應該獲得 CPU 時間。本實作使用 **Round-Robin (輪詢)** 演算法。
+
+#### Round-Robin 演算法
+
+Round-Robin 是最簡單的排程演算法：
+1. 所有就緒任務排成一個佇列
+2. 每個任務獲得相等的時間片 (Time Slice)
+3. 時間片用完後，切換到下一個任務
+4. 到達佇列尾端時，回到開頭
+
+#### 排程器資料結構
+
+```c
+// 定義於 cpu/scheduler.c
+
+static pcb_t *current_task = 0;      // 目前執行的任務
+static pcb_t *ready_queue_head = 0;  // 就緒佇列頭
+static pcb_t *ready_queue_tail = 0;  // 就緒佇列尾
+static uint32_t task_count = 0;      // 任務總數
+static int scheduler_enabled = 0;    // 排程器開關
+```
+
+#### 排程函數
+
+```c
+// 定義於 cpu/scheduler.c
+
+void schedule(void) {
+    if (!scheduler_enabled) return;
+    if (task_count <= 1) return;
+    if (!current_task) return;
+
+    pcb_t *old_task = current_task;
+    pcb_t *next_task = 0;
+
+    // Round-Robin: 找下一個 READY 任務
+    pcb_t *candidate = old_task->next;
+    if (!candidate) {
+        candidate = ready_queue_head;  // 回繞到佇列開頭
+    }
+
+    // 搜尋 READY 狀態的任務
+    pcb_t *start = candidate;
+    do {
+        if (candidate->state == TASK_READY) {
+            next_task = candidate;
+            break;
+        }
+        candidate = candidate->next;
+        if (!candidate) {
+            candidate = ready_queue_head;
+        }
+    } while (candidate != start);
+
+    // 沒有其他任務可切換
+    if (!next_task || next_task == old_task) return;
+
+    // 更新狀態
+    if (old_task->state == TASK_RUNNING) {
+        old_task->state = TASK_READY;
+    }
+    next_task->state = TASK_RUNNING;
+    current_task = next_task;
+
+    // 執行上下文切換
+    context_switch(&old_task->esp, next_task->esp);
+}
+```
+
+#### Timer 中斷整合
+
+搶佔式排程透過 Timer 中斷實現：
+
+```c
+// 修改於 cpu/timer.c
+
+#include "scheduler.h"
+
+static void timer_callback(registers_t *regs){
+    tick++;
+
+    // 呼叫排程器進行搶佔式多工
+    scheduler_timer_handler(regs);
+}
+```
+
+每次 Timer 中斷（預設每秒 50 次）都會觸發排程器檢查是否需要切換任務。
+
+---
+
+### Task State Segment (TSS)
+
+TSS 是 x86 架構中用於硬體任務切換的資料結構。雖然現代作業系統通常使用軟體任務切換，但 TSS 仍然是必要的，原因如下：
+
+1. **特權級切換**: 當從 Ring 3 (User Mode) 切換到 Ring 0 (Kernel Mode) 時，CPU 需要知道要使用哪個核心堆疊
+2. **ESP0 欄位**: TSS 中的 `esp0` 告訴 CPU 核心模式的堆疊指標
+
+#### TSS 結構
+
+```c
+// 定義於 cpu/tss.h
+
+typedef struct {
+    uint32_t prev_tss;   // 前一個 TSS 鏈結（軟體切換不使用）
+    uint32_t esp0;       // Ring 0 堆疊指標 ← 最重要的欄位
+    uint32_t ss0;        // Ring 0 堆疊段選擇器
+    uint32_t esp1;       // Ring 1 堆疊指標（未使用）
+    uint32_t ss1;        // Ring 1 堆疊段
+    uint32_t esp2;       // Ring 2 堆疊指標（未使用）
+    uint32_t ss2;        // Ring 2 堆疊段
+    uint32_t cr3;        // 頁目錄基底暫存器
+    uint32_t eip;
+    uint32_t eflags;
+    uint32_t eax, ecx, edx, ebx;
+    uint32_t esp, ebp, esi, edi;
+    uint32_t es, cs, ss, ds, fs, gs;
+    uint32_t ldt;        // LDT 選擇器
+    uint16_t trap;       // 任務切換陷阱位元
+    uint16_t iomap_base; // I/O 權限位圖偏移
+} __attribute__((packed)) tss_entry_t;
+```
+
+#### TSS 初始化
+
+```c
+// 定義於 cpu/tss.c
+
+tss_entry_t tss_entry;
+
+void tss_init(uint32_t kernel_ss, uint32_t kernel_esp) {
+    uint32_t base = (uint32_t)&tss_entry;
+    uint32_t limit = sizeof(tss_entry_t) - 1;
+
+    // 清除 TSS
+    memory_set((uint8_t*)&tss_entry, 0, sizeof(tss_entry_t));
+
+    // 設定核心堆疊（用於特權級切換）
+    tss_entry.ss0 = kernel_ss;   // 0x10 (核心資料段)
+    tss_entry.esp0 = kernel_esp; // 0x90000
+
+    // 設定核心段選擇器
+    tss_entry.cs = 0x08;  // 核心程式碼段
+    tss_entry.ss = kernel_ss;
+    tss_entry.ds = kernel_ss;
+    tss_entry.es = kernel_ss;
+    tss_entry.fs = kernel_ss;
+    tss_entry.gs = kernel_ss;
+
+    // I/O 位圖偏移設為結構大小（表示無 I/O 權限）
+    tss_entry.iomap_base = sizeof(tss_entry_t);
+
+    // 在 GDT 中安裝 TSS 描述符
+    gdt_set_gate(3, base, limit, 0x89, 0x00);
+}
+```
+
+#### 載入 TSS
+
+TSS 必須透過 `ltr` (Load Task Register) 指令載入：
+
+```asm
+; 定義於 cpu/context_switch.asm
+
+global tss_flush
+tss_flush:
+    mov ax, 0x18        ; TSS 選擇器 (GDT entry 3 * 8 = 0x18)
+    ltr ax              ; 載入任務暫存器
+    ret
+```
+
+---
+
+### Global Descriptor Table (GDT) 擴展
+
+為了支援 TSS，需要在 GDT 中新增一個 TSS 描述符。
+
+#### 核心 GDT 結構
+
+```c
+// 定義於 cpu/gdt.h
+
+typedef struct {
+    uint16_t limit_low;    // Limit bits 0-15
+    uint16_t base_low;     // Base bits 0-15
+    uint8_t  base_middle;  // Base bits 16-23
+    uint8_t  access;       // 存取權限位元組
+    uint8_t  granularity;  // 標誌 + Limit bits 16-19
+    uint8_t  base_high;    // Base bits 24-31
+} __attribute__((packed)) gdt_entry_t;
+
+typedef struct {
+    uint16_t limit;        // GDT 大小 - 1
+    uint32_t base;         // GDT 線性基底位址
+} __attribute__((packed)) gdt_ptr_t;
+```
+
+#### GDT 配置
+
+```c
+// 定義於 cpu/gdt.c
+
+#define GDT_ENTRIES 4
+
+static gdt_entry_t gdt[GDT_ENTRIES];
+static gdt_ptr_t gdt_ptr;
+
+void gdt_init(void) {
+    gdt_ptr.limit = (sizeof(gdt_entry_t) * GDT_ENTRIES) - 1;
+    gdt_ptr.base = (uint32_t)&gdt;
+
+    // Entry 0: Null 描述符（必須）
+    gdt_set_gate(0, 0, 0, 0, 0);
+
+    // Entry 1: 程式碼段 (選擇器 0x08)
+    // Access: P=1, DPL=0, S=1, Type=0xA = 0x9A
+    // Granularity: G=1, D=1 = 0xCF
+    gdt_set_gate(1, 0, 0xFFFFF, 0x9A, 0xCF);
+
+    // Entry 2: 資料段 (選擇器 0x10)
+    // Access: P=1, DPL=0, S=1, Type=0x2 = 0x92
+    gdt_set_gate(2, 0, 0xFFFFF, 0x92, 0xCF);
+
+    // Entry 3: TSS (選擇器 0x18)
+    // 由 tss_init() 填入
+    gdt_set_gate(3, 0, 0, 0, 0);
+
+    // 載入新的 GDT
+    gdt_flush((uint32_t)&gdt_ptr);
+}
+```
+
+#### GDT Entry 設定函數
+
+```c
+// 定義於 cpu/gdt.c
+
+void gdt_set_gate(int num, uint32_t base, uint32_t limit,
+                  uint8_t access, uint8_t gran) {
+    // 設定基底位址
+    gdt[num].base_low = base & 0xFFFF;
+    gdt[num].base_middle = (base >> 16) & 0xFF;
+    gdt[num].base_high = (base >> 24) & 0xFF;
+
+    // 設定限制
+    gdt[num].limit_low = limit & 0xFFFF;
+    gdt[num].granularity = (limit >> 16) & 0x0F;
+
+    // 設定標誌和存取權限
+    gdt[num].granularity |= (gran & 0xF0);
+    gdt[num].access = access;
+}
+```
+
+#### GDT Flush 組合語言
+
+```asm
+; 定義於 cpu/context_switch.asm
+
+global gdt_flush
+gdt_flush:
+    mov eax, [esp + 4]      ; 取得 gdt_ptr 指標
+    lgdt [eax]              ; 載入 GDT
+
+    ; 重新載入段暫存器
+    mov ax, 0x10            ; 資料段選擇器 (entry 2)
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+
+    ; 遠跳轉以重新載入 CS
+    jmp 0x08:.flush_done    ; 程式碼段選擇器 (entry 1)
+.flush_done:
+    ret
+```
+
+---
+
+### TSS 描述符格式
+
+TSS 描述符與普通段描述符略有不同：
+
+```
+位元    欄位           TSS 的值
+─────────────────────────────────────
+7-6     選擇通道      與一般段相同
+5-4     存取模式      與一般段相同
+3-0     Type          0x9 = 可用的 32-bit TSS
+                      0xB = 忙碌的 32-bit TSS
+
+Access Byte for TSS:
+- Bit 7: Present (P) = 1
+- Bits 6-5: DPL = 00 (Ring 0)
+- Bit 4: S = 0 (系統段)
+- Bits 3-0: Type = 1001 (可用的 32-bit TSS)
+
+完整的 Access Byte = 0x89
+```
+
+---
+
+### 核心初始化流程
+
+```c
+// 定義於 kernel/kernel.c
+
+void kernel_main(){
+    // ... 其他初始化 ...
+
+    irq_install();
+
+    // 1. 初始化核心 GDT（取代開機時的 GDT，加入 TSS entry）
+    gdt_init();
+
+    // 2. 初始化 TSS（核心資料段 0x10，核心堆疊 0x90000）
+    tss_init(0x10, 0x90000);
+    tss_flush();
+
+    // 3. 初始化多工系統
+    task_init();
+
+    kprint("Multitasking: OK\n");
+    kprint("> ");
+}
+```
+
+---
+
+### 任務管理 API
+
+#### 初始化
+
+```c
+// 定義於 cpu/task.c
+
+void task_init(void) {
+    // 清除任務池
+    memory_set((uint8_t*)task_pool, 0, sizeof(task_pool));
+
+    // 初始化排程器
+    scheduler_init();
+
+    // 創建 "main" 任務代表當前核心執行
+    pcb_t *main_task = &task_pool[0];
+    main_task->pid = 0;
+    main_task->state = TASK_RUNNING;
+    main_task->kernel_stack = 0;  // 使用開機堆疊
+    main_task->esp = 0;           // 第一次切換時保存
+
+    scheduler_add_task(main_task);
+}
+```
+
+#### 創建任務
+
+```c
+// 定義於 cpu/task.c
+
+pcb_t* task_create(void (*entry)(void)) {
+    // 1. 在任務池中找空位
+    pcb_t *task = find_free_slot();
+    if (!task) return 0;
+
+    // 2. 分配核心堆疊 (4KB, 頁對齊)
+    uint32_t stack_base = kmalloc(KERNEL_STACK_SIZE, 1, 0);
+    if (!stack_base) return 0;
+    uint32_t stack_top = stack_base + KERNEL_STACK_SIZE;
+
+    // 3. 初始化 PCB
+    task->pid = next_pid++;
+    task->state = TASK_READY;
+    task->kernel_stack = stack_base;
+    task->kernel_stack_top = stack_top;
+    task->entry_point = entry;
+
+    // 4. 設置初始堆疊框架
+    uint32_t *sp = (uint32_t*)stack_top;
+    *--sp = (uint32_t)entry;  // Return address
+    *--sp = 0;                // EBP
+    *--sp = 0;                // EBX
+    *--sp = 0;                // ESI
+    *--sp = 0;                // EDI
+    *--sp = 0x202;            // EFLAGS (IF=1)
+    task->esp = (uint32_t)sp;
+
+    // 5. 加入排程器
+    scheduler_add_task(task);
+
+    return task;
+}
+```
+
+#### 終止任務
+
+```c
+// 定義於 cpu/task.c
+
+void task_exit(void) {
+    pcb_t *current = scheduler_current();
+    current->state = TASK_TERMINATED;
+
+    // 釋放堆疊
+    if (current->kernel_stack) {
+        kfree((void*)current->kernel_stack);
+    }
+
+    // 強制切換到下一個任務
+    schedule();
+
+    // 永遠不會到達這裡
+    while(1) { asm volatile("hlt"); }
+}
+```
+
+---
+
+### Shell 測試指令
+
+```c
+// 定義於 kernel/kernel.c
+
+// 測試任務 A
+void test_task_a(void) {
+    while(1) {
+        kprint("A");
+        for(volatile int i = 0; i < 500000; i++);
+    }
+}
+
+// 測試任務 B
+void test_task_b(void) {
+    while(1) {
+        kprint("B");
+        for(volatile int i = 0; i < 500000; i++);
+    }
+}
+
+// Shell 指令處理
+if (strcmp(input, "multitask") == 0) {
+    kprint("Starting multitasking test...\n");
+    task_create(test_task_a);
+    task_create(test_task_b);
+    scheduler_enable();
+    kprint("Scheduler enabled! You should see ABABAB...\n");
+}
+```
+
+執行 `multitask` 指令後，應該看到交替輸出的 `ABABABABAB...`，證明兩個任務正在被排程器切換。
+
+---
+
+### 執行流程圖
+
+```
+                    ┌─────────────────────────────────────┐
+                    │         Timer IRQ (IRQ0)            │
+                    │         每秒觸發約 50 次            │
+                    └─────────────┬───────────────────────┘
+                                  │
+                                  ▼
+                    ┌─────────────────────────────────────┐
+                    │       timer_callback()              │
+                    │       cpu/timer.c                   │
+                    └─────────────┬───────────────────────┘
+                                  │
+                                  ▼
+                    ┌─────────────────────────────────────┐
+                    │    scheduler_timer_handler()        │
+                    │    cpu/scheduler.c                  │
+                    └─────────────┬───────────────────────┘
+                                  │
+                                  ▼
+                    ┌─────────────────────────────────────┐
+                    │          schedule()                 │
+                    │    選擇下一個 READY 任務            │
+                    │    (Round-Robin 演算法)             │
+                    └─────────────┬───────────────────────┘
+                                  │
+                                  ▼
+                    ┌─────────────────────────────────────┐
+                    │       context_switch()              │
+                    │    cpu/context_switch.asm           │
+                    │                                     │
+                    │  1. 保存當前暫存器到堆疊            │
+                    │  2. 保存 ESP 到舊任務 PCB           │
+                    │  3. 載入新任務的 ESP                │
+                    │  4. 從新堆疊恢復暫存器              │
+                    │  5. ret 跳到新任務                  │
+                    └─────────────────────────────────────┘
+```
+
+---
+
+### 檔案結構
+
+| 檔案 | 說明 |
+|------|------|
+| `cpu/task.h` | PCB 結構定義、任務狀態枚舉、API 宣告 |
+| `cpu/task.c` | 任務管理實作：init, create, exit |
+| `cpu/scheduler.h` | 排程器 API 宣告 |
+| `cpu/scheduler.c` | Round-Robin 排程器實作 |
+| `cpu/tss.h` | TSS 結構定義 |
+| `cpu/tss.c` | TSS 初始化、GDT TSS entry 設定 |
+| `cpu/gdt.h` | GDT 結構定義 |
+| `cpu/gdt.c` | 核心 GDT 初始化（取代開機 GDT） |
+| `cpu/context_switch.asm` | Context switch、tss_flush、gdt_flush 組語 |
+| `cpu/timer.c` | Timer 中斷處理，呼叫 scheduler |
+| `kernel/kernel.c` | 初始化流程、測試任務 |
+
+---
+
+### 注意事項
+
+1. **堆疊對齊**: x86 ABI 要求堆疊 16 位元組對齊，使用 `kmalloc()` 的頁對齊選項確保這點。
+
+2. **中斷安全**: Context switch 期間不要手動操作中斷旗標。`pushf`/`popf` 會自動保存和恢復 EFLAGS。
+
+3. **Main 任務**: 初始核心執行會變成 Task 0，使用開機時設定的堆疊，不可釋放。
+
+4. **EOI 順序**: 確保在 IRQ handler 中先發送 EOI 給 PIC，再進行 context switch。目前的 `irq_handler()` 已經正確處理這點。
+
+5. **單一位址空間**: 目前所有任務共享同一個頁表，沒有記憶體隔離。未來需要為每個任務配置獨立的頁目錄。
+
+---
+
+### 進階主題（未來實作）
+
+1. **優先權排程 (Priority Scheduling)**: 為任務加入優先權欄位，高優先權任務獲得更多 CPU 時間。
+
+2. **多級回饋佇列 (MLFQ)**: 結合多個優先權佇列，動態調整任務優先權。
+
+3. **User Mode (Ring 3)**:
+   - 為每個任務設定獨立的頁表
+   - 實作系統呼叫 (int 0x80)
+   - TSS 的 esp0 用於特權級切換
+
+4. **同步原語**:
+   - Mutex (互斥鎖)
+   - Semaphore (信號量)
+   - Spinlock (自旋鎖)
+
+5. **行程間通訊 (IPC)**:
+   - 管道 (Pipes)
+   - 共享記憶體
+   - 訊息佇列
+
+---
+
+### 參考資料
+
+- [OSDev Wiki - Context Switching](https://wiki.osdev.org/Context_Switching)
+- [OSDev Wiki - Kernel Multitasking](https://wiki.osdev.org/Kernel_Multitasking)
+- [OSDev Wiki - TSS](https://wiki.osdev.org/Task_State_Segment)
+- [OSDev Wiki - GDT Tutorial](https://wiki.osdev.org/GDT_Tutorial)
+- [OSDev Wiki - Scheduling Algorithms](https://wiki.osdev.org/Scheduling_Algorithms)
+- [Intel® 64 and IA-32 Architectures Software Developer's Manual, Volume 3A: System Programming Guide](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html) - Chapter 7: Task Management
+- [James Molloy's Kernel Development Tutorial - Multitasking](http://www.jamesmolloy.co.uk/tutorial_html/9.-Multitasking.html)
+- [BrokenThorn Entertainment - OS Development Series](http://www.brokenthorn.com/Resources/OSDevIndex.html)
+
+
+## multiboot

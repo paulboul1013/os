@@ -1,6 +1,7 @@
 #include "timer.h"
 #include "isr.h"
 #include "ports.h"
+#include "scheduler.h"
 #include "../libc/function.h"
 
 volatile uint32_t tick = 0;
@@ -8,7 +9,9 @@ volatile uint32_t timer_freq = 0;
 
 static void timer_callback(registers_t *regs){
     tick++;
-    UNUSED(regs);
+
+    // Call scheduler for preemptive multitasking
+    scheduler_timer_handler(regs);
 }
 
 void init_timer(uint32_t freq) {

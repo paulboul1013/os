@@ -9,6 +9,10 @@
 #include "../cpu/timer.h"
 #include "../cpu/pmm.h"
 #include "../cpu/paging.h"
+#include "../cpu/task.h"
+#include "../cpu/scheduler.h"
+#include "../cpu/tss.h"
+#include "../cpu/gdt.h"
 #include <stdint.h>
 
 
@@ -37,6 +41,24 @@ void trigger_overflow() {
 
 extern uintptr_t __stack_chk_guard;
 
+// Test task A - prints 'A' repeatedly
+void test_task_a(void) {
+    while(1) {
+        kprint("A");
+        // Busy wait to slow down output
+        for(volatile int i = 0; i < 500000; i++);
+    }
+}
+
+// Test task B - prints 'B' repeatedly
+void test_task_b(void) {
+    while(1) {
+        kprint("B");
+        // Busy wait to slow down output
+        for(volatile int i = 0; i < 500000; i++);
+    }
+}
+
 void kernel_main(){
     // simple "randomness" by mixing some bits (could be improved)
     __stack_chk_guard = __stack_chk_guard ^ (uintptr_t)&kernel_main;
@@ -54,13 +76,24 @@ void kernel_main(){
     init_paging();
 
     if (constructor_test_val == 42) {
-
         kprint("Global Constructors: OK\n");
     } else {
         kprint("Global Constructors: FAILED\n");
     }
-    kprint("> ");
+
     irq_install();
+
+    // Initialize kernel GDT (replaces boot GDT, adds TSS entry)
+    gdt_init();
+
+    // Initialize TSS (kernel data segment 0x10, kernel stack at 0x90000)
+    tss_init(0x10, 0x90000);
+    tss_flush();
+
+    // Initialize multitasking system
+    task_init();
+
+    kprint("> ");
 }
 
 void user_input(char *input){
@@ -137,8 +170,17 @@ void user_input(char *input){
         uint32_t val = *ptr;
         printf("Value: 0x%x (Should have faulted!)\n", val);
         kprint("> ");
+    }else if (strcmp(input, "multitask") == 0) {
+        kprint("Starting multitasking test...\n");
+        kprint("Creating Task A and Task B...\n");
+        task_create(test_task_a);
+        task_create(test_task_b);
+        scheduler_enable();
+        kprint("Scheduler enabled! You should see ABABAB...\n");
+        // Main task continues here, competing with A and B
+    }else if (strcmp(input, "tasks") == 0) {
+        kprint("Task list: (not implemented yet)\n> ");
     }
-
 
     else{
         kprint("> ");
