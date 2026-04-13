@@ -13,6 +13,7 @@
 #include "../cpu/scheduler.h"
 #include "../cpu/tss.h"
 #include "../cpu/gdt.h"
+#include "../fs/fs.h"
 #include <stdint.h>
 
 
@@ -92,6 +93,9 @@ void kernel_main(){
 
     // Initialize multitasking system
     task_init();
+
+    // Initialize file system
+    fs_init();
 
     kprint("> ");
 }
@@ -180,9 +184,162 @@ void user_input(char *input){
         // Main task continues here, competing with A and B
     }else if (strcmp(input, "tasks") == 0) {
         kprint("Task list: (not implemented yet)\n> ");
-    }
 
-    else{
+    /* ============================================================
+     *  File System Commands (CRUD)
+     * ============================================================ */
+
+    /* touch <name> — 建立空白檔案 (Create) */
+    }else if (strstartswith(input, "touch ")) {
+        const char *fname = input + 6;
+        int ret = fs_create(fname);
+        if (ret == FS_OK)
+            printf("Created file '%s'\n", fname);
+        else if (ret == FS_ERR_EXISTS)
+            printf("Error: file '%s' already exists\n", fname);
+        else if (ret == FS_ERR_FULL)
+            kprint("Error: file system is full\n");
+        else
+            kprint("Error: invalid file name\n");
+        kprint("> ");
+
+    /* cat <name> — 讀取並顯示檔案內容 (Read) */
+    }else if (strstartswith(input, "cat ")) {
+        const char *fname = input + 4;
+        uint8_t buf[FS_MAX_FILESIZE + 1];
+        int ret = fs_read(fname, buf, FS_MAX_FILESIZE);
+        if (ret >= 0) {
+            buf[ret] = '\0';  /* 確保 null 結尾 */
+            if (ret == 0)
+                printf("(file '%s' is empty)\n", fname);
+            else
+                kprint((char*)buf);
+            kprint("\n");
+        } else {
+            printf("Error: file '%s' not found\n", fname);
+        }
+        kprint("> ");
+
+    /* write <name> <content> — 寫入檔案 (覆蓋) (Update) */
+    }else if (strstartswith(input, "write ")) {
+        /* 找到第一個空格分隔檔名和內容 */
+        const char *rest = input + 6;
+        int space_pos = -1;
+        for (int i = 0; rest[i] != '\0'; i++) {
+            if (rest[i] == ' ') { space_pos = i; break; }
+        }
+        if (space_pos <= 0) {
+            kprint("Usage: write <filename> <content>\n");
+        } else {
+            /* 暫時拷貝檔名 */
+            char fname[FS_MAX_FILENAME];
+            int k;
+            for (k = 0; k < space_pos && k < FS_MAX_FILENAME - 1; k++)
+                fname[k] = rest[k];
+            fname[k] = '\0';
+
+            const char *content = rest + space_pos + 1;
+            int len = strlen(content);
+
+            /* 如果檔案不存在，自動建立 */
+            if (fs_create(fname) == FS_ERR_EXISTS) {
+                /* 已存在，沒問題 */
+            }
+
+            int ret = fs_write(fname, (const uint8_t*)content, (uint32_t)len);
+            if (ret == FS_OK)
+                printf("Wrote %d bytes to '%s'\n", len, fname);
+            else if (ret == FS_ERR_OVERFLOW)
+                printf("Error: data too large for '%s'\n", fname);
+            else
+                printf("Error: cannot write to '%s'\n", fname);
+        }
+        kprint("> ");
+
+    /* append <name> <content> — 附加內容到檔案 (Update) */
+    }else if (strstartswith(input, "append ")) {
+        const char *rest = input + 7;
+        int space_pos = -1;
+        for (int i = 0; rest[i] != '\0'; i++) {
+            if (rest[i] == ' ') { space_pos = i; break; }
+        }
+        if (space_pos <= 0) {
+            kprint("Usage: append <filename> <content>\n");
+        } else {
+            char fname[FS_MAX_FILENAME];
+            int k;
+            for (k = 0; k < space_pos && k < FS_MAX_FILENAME - 1; k++)
+                fname[k] = rest[k];
+            fname[k] = '\0';
+
+            const char *content = rest + space_pos + 1;
+            int len = strlen(content);
+
+            int ret = fs_append(fname, (const uint8_t*)content, (uint32_t)len);
+            if (ret == FS_OK)
+                printf("Appended %d bytes to '%s'\n", len, fname);
+            else if (ret == FS_ERR_NOT_FOUND)
+                printf("Error: file '%s' not found\n", fname);
+            else if (ret == FS_ERR_OVERFLOW)
+                printf("Error: not enough space in '%s'\n", fname);
+            else
+                printf("Error: cannot append to '%s'\n", fname);
+        }
+        kprint("> ");
+
+    /* rm <name> — 刪除檔案 (Delete) */
+    }else if (strstartswith(input, "rm ")) {
+        const char *fname = input + 3;
+        int ret = fs_delete(fname);
+        if (ret == FS_OK)
+            printf("Deleted file '%s'\n", fname);
+        else
+            printf("Error: file '%s' not found\n", fname);
+        kprint("> ");
+
+    /* ls — 列出所有檔案 */
+    }else if (strcmp(input, "ls") == 0) {
+        fs_list();
+        kprint("> ");
+
+    /* stat <name> — 顯示檔案資訊 */
+    }else if (strstartswith(input, "stat ")) {
+        const char *fname = input + 5;
+        int ret = fs_stat(fname);
+        if (ret != FS_OK)
+            printf("Error: file '%s' not found\n", fname);
+        kprint("> ");
+
+    /* rename <old> <new> — 重新命名檔案 */
+    }else if (strstartswith(input, "rename ")) {
+        const char *rest = input + 7;
+        int space_pos = -1;
+        for (int i = 0; rest[i] != '\0'; i++) {
+            if (rest[i] == ' ') { space_pos = i; break; }
+        }
+        if (space_pos <= 0) {
+            kprint("Usage: rename <old_name> <new_name>\n");
+        } else {
+            char old_name[FS_MAX_FILENAME];
+            int k;
+            for (k = 0; k < space_pos && k < FS_MAX_FILENAME - 1; k++)
+                old_name[k] = rest[k];
+            old_name[k] = '\0';
+
+            const char *new_name = rest + space_pos + 1;
+            int ret = fs_rename(old_name, new_name);
+            if (ret == FS_OK)
+                printf("Renamed '%s' -> '%s'\n", old_name, new_name);
+            else if (ret == FS_ERR_NOT_FOUND)
+                printf("Error: file '%s' not found\n", old_name);
+            else if (ret == FS_ERR_EXISTS)
+                printf("Error: file '%s' already exists\n", new_name);
+            else
+                kprint("Error: invalid name\n");
+        }
+        kprint("> ");
+
+    }else{
         kprint("> ");
     }
 
