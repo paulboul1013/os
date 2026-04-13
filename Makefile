@@ -3,9 +3,9 @@
 # $^=all dependencies
 
 # 搜尋所有的 C 原始碼檔案
-C_SOURCES = $(wildcard kernel/*.c drivers/*.c cpu/*.c libc/*.c)
+C_SOURCES = $(wildcard kernel/*.c drivers/*.c cpu/*.c libc/*.c fs/*.c)
 # 搜尋所有的標頭檔
-HEADERS = $(wildcard kernel/*.h drivers/*.h cpu/*.h libc/*.h)
+HEADERS = $(wildcard kernel/*.h drivers/*.h cpu/*.h libc/*.h fs/*.h)
 
 # 定義目標物件檔案列表
 OBJS = ${C_SOURCES:.c=.o} cpu/interrupt.o cpu/context_switch.o
@@ -60,4 +60,4 @@ debug : os-image.bin kernel.elf
 # 清除所有產生的檔案
 clean:
 	rm -rf *.bin *.dis *.o os-image.bin *.elf
-	rm -rf kernel/*.o boot/*.bin drivers/*.o boot/*.o cpu/*.o libc/*.o
+	rm -rf kernel/*.o boot/*.bin drivers/*.o boot/*.o cpu/*.o libc/*.o fs/*.o
