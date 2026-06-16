@@ -62,10 +62,10 @@ void init_paging() {
             pt->pages[i].frame_addr = frame_idx;
             pt->pages[i].present = 1;
             pt->pages[i].rw = 1;
-            pt->pages[i].user = 0;
+            pt->pages[i].user = 1; // 允許 User mode (Ring 3) 存取
         }
         // 放入 PD 的對應項
-        kernel_directory->entries[j] = pt_phys | 0x3;
+        kernel_directory->entries[j] = pt_phys | 0x7; // Present | R/W | User
     }
     
     // 自我引用 (Recursive Mapping)
