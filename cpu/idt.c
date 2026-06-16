@@ -5,7 +5,7 @@ void set_idt_gate(int n,uint32_t handler){
     idt[n].low_offset=handler & 0xFFFF;
     idt[n].sel=KERNEL_CS;
     idt[n].always0=0;
-    idt[n].flags=0X8E;
+    idt[n].flags=0XEE; //DPL(privilege level)=3，let ring 3 trigger
     idt[n].high_offset=(handler >> 16) & 0xFFFF;
 }
 void set_idt(){
