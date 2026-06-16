@@ -1,6 +1,7 @@
 #include "../cpu/isr.h"
 #include "../drivers/screen.h"
 #include "kernel.h"
+#include "syscall.h"
 #include "../libc/string.h"
 #include "../libc/mem.h"
 #include "../libc/cal.h"
@@ -11,6 +12,7 @@
 #include "../cpu/paging.h"
 #include "../cpu/task.h"
 #include "../cpu/scheduler.h"
+#include "../cpu/usermode.h"
 #include "../cpu/tss.h"
 #include "../cpu/gdt.h"
 #include "../fs/fs.h"
@@ -83,6 +85,7 @@ void kernel_main(){
     }
 
     irq_install();
+    syscall_init(); // 初始化系統呼叫
 
     // Initialize kernel GDT (replaces boot GDT, adds TSS entry)
     gdt_init();
