@@ -1,7 +1,7 @@
 #include "gdt.h"
 
-// GDT with 4 entries: null, code, data, TSS
-#define GDT_ENTRIES 4
+// GDT with 6 entries: null, code, data, TSS, code2, data2
+#define GDT_ENTRIES 6
 
 static gdt_entry_t gdt[GDT_ENTRIES];
 static gdt_ptr_t gdt_ptr;
@@ -43,6 +43,16 @@ void gdt_init(void) {
     // Entry 3: TSS (selector 0x18)
     // Will be set up by tss_init() - leave empty for now
     gdt_set_gate(3, 0, 0, 0, 0);
+
+    // Entry 4: User code segment (selector 0x20, Ring 3=0x23)
+    // Access: Present=1, DPL=3 ,S=1 ,Type=0xA = 1111 1010 = 0xFA
+    
+    gdt_set_gate(4,0,0xFFFFF,0xFA,0xCF);
+
+    // Entry 5: User data segment (selector 0x28, Ring 3=0x23)
+    // Access: Present=1, DPL=3 ,S=1 ,Type=0x2 = 1111 0010 = 0xF2
+    
+    gdt_set_gate(5,0,0xFFFFF,0xF2,0xCF);
 
     // Load the new GDT
     gdt_flush((uint32_t)&gdt_ptr);
