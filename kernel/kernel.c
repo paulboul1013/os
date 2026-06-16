@@ -100,11 +100,18 @@ void kernel_main(){
     kprint("> ");
 }
 
+extern void user_hello(void);
+
+
 void user_input(char *input){
     if (strcmp(input,"end")==0){
         kprint("Stopping the CPU\n");
         asm volatile("hlt");
-    }else if (strcmp(input,"page")==0){
+    }else if (strcmp(input,"usertest")==0){
+        kprint("lauching user mode task...\n");
+        lauch_user_task(user_hello);
+    }
+    else if (strcmp(input,"page")==0){
         //get test kmalloc
         uint32_t phys_addr;
         uint32_t page=kmalloc(1000,1,&phys_addr);
