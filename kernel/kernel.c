@@ -100,7 +100,20 @@ void kernel_main(){
     // Initialize file system
     fs_init();
 
-    kprint("> ");
+    kprint("Initializing Multitasking scheduler and User Space Shell...\n");
+    // 新增一個 Shell Wrapper Task，當它被排程到時，就會切換進 Ring 3
+    extern void user_shell_main(void);
+    void shell_init_wrapper(void) {
+        lauch_user_task(user_shell_main);
+    }
+    
+    task_create(shell_init_wrapper);
+    scheduler_enable(); // 啟動排程器（底層由 PIT Timer Driver 推動）
+
+    // 讓原來的 kernel_main 退化為 Idle Process
+    while (1) {
+        asm volatile("hlt");
+    }
 }
 
 extern void user_hello(void);

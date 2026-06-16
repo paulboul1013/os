@@ -2,6 +2,7 @@
 #include "isr.h"
 #include "../drivers/screen.h"
 #include "../libc/function.h"
+#include "tss.h"
 
 static pcb_t *current_task = 0;
 static pcb_t *ready_queue_head = 0;
@@ -88,6 +89,11 @@ void schedule(void) {
     }
     next_task->state = TASK_RUNNING;
     current_task = next_task;
+
+    // 確保回到 Kernel 時有獨立的 Kernel Stack，不更新的話新 Task 會蓋壞舊 Task 的 Stack
+    if (next_task->kernel_stack_top != 0) {
+        tss_set_kernel_stack(next_task->kernel_stack_top);
+    }
 
     // Perform context switch
     context_switch(&old_task->esp, next_task->esp);
