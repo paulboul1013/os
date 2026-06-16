@@ -15,7 +15,6 @@ void syscall_handler(registers_t *r){
 
     switch (syscall_num) {
         case SYS_EXIT:
-
             kprint("[syscall] exit()\n");
             task_exit();
             break;

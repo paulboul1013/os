@@ -28,8 +28,11 @@ static char current_input[256] = ""; // 保存當前輸入（用於上下鍵瀏�
 static  char key_buffer[256];
 static int input_line_start_offset = 0; // Track the start of current input line
 static int expecting_e0 = 0; // 標記是否正在等待 0xE0 後續的 scancode
-static int cursor_position = 0; // 光標在 key_buffer 中的位置（0 = 開頭，strlen = 末尾）
+static int cursor_position = 0; // 光標在 key_buffer 中的位置
 static int shift_active = 0; // 標記 Shift 鍵是否被按下
+
+volatile int kbd_line_ready = 0;
+char kbd_line_buffer[256] = "";
 
 // 可用命令列表（用於 Tab 自動補全）
 static const char* available_commands[] = {
@@ -514,7 +517,16 @@ static void keyboard_callback(registers_t *regs){
         if (strlen(key_buffer) > 0) {
             add_to_history(key_buffer);
         }
-        user_input(key_buffer);//kernel-controlled function
+        
+        // 複製到全域 buffer 給 Syscall (SYS_READ) 讀取
+        int i=0;
+        while(key_buffer[i] != '\0' && i < 255){
+            kbd_line_buffer[i] = key_buffer[i];
+            i++;
+        }
+        kbd_line_buffer[i] = '\0';
+        kbd_line_ready = 1;
+
         key_buffer[0]='\0';
         current_input[0]='\0'; // 清除當前輸入緩存
         cursor_position = 0; // 重置光標位置
