@@ -1,8 +1,8 @@
 static inline void sys_write(const char *str) {
     asm volatile(
-        "mov eax, 1\n"  // SYS_WRITE
-        "mov ebx, %0\n" // 字串指標
-        "int 0x80\n"
+        "movl $1, %%eax\n"  // SYS_WRITE
+        "movl %0, %%ebx\n" // 字串指標
+        "int $0x80\n"
         :: "r"(str)
         : "eax", "ebx"
     );
@@ -10,9 +10,9 @@ static inline void sys_write(const char *str) {
 
 static inline void sys_exit(int code) {
     asm volatile(
-        "mov eax, 0\n"  // SYS_EXIT
-        "mov ebx, %0\n" // 返回碼
-        "int 0x80\n"
+        "movl $0, %%eax\n"  // SYS_EXIT
+        "movl %0, %%ebx\n" // 返回碼
+        "int $0x80\n"
         :: "r"(code)
         : "eax", "ebx"
     );

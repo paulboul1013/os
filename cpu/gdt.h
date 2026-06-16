@@ -3,10 +3,10 @@
 
 #include <stdint.h>
 
-#define KERNEL_CODE_SEG 0x08
-#define KERNEL_DATA_SEG 0x10
-#define USER_CODE_SEG   0x18
-#define USER_DATA_SEG   0x20
+#define KERNEL_CS 0x08
+#define KERNEL_DS 0x10
+#define USER_CS 0x23
+#define USER_DS 0x2B
 
 // GDT entry structure
 typedef struct {
