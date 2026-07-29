@@ -27,7 +27,6 @@ static char current_input[256] = ""; // 保存當前輸入（用於上下鍵瀏�
 
 static  char key_buffer[256];
 static int input_line_start_offset = 0; // Track the start of current input line
-static int input_line_active = 0;
 static int expecting_e0 = 0; // 標記是否正在等待 0xE0 後續的 scancode
 static int cursor_position = 0; // 光標在 key_buffer 中的位置
 static int shift_active = 0; // 標記 Shift 鍵是否被按下
@@ -46,11 +45,8 @@ static const char* available_commands[] = {
     NULL  // 結束標記
 };
 
-static void begin_input_line_if_needed() {
-    if (!input_line_active) {
-        input_line_start_offset = get_cursor_offset();
-        input_line_active = 1;
-    }
+void keyboard_prepare_input_line() {
+    input_line_start_offset = get_cursor_offset();
 }
 
 // 在光標位置插入字符
@@ -436,10 +432,8 @@ static void keyboard_callback(registers_t *regs){
         
         // 處理上下左右鍵（只處理 make code，忽略 break code）
         if (scancode == UP_ARROW) {
-            begin_input_line_if_needed();
             navigate_history_up();
         } else if (scancode == DOWN_ARROW) {
-            begin_input_line_if_needed();
             navigate_history_down();
         } else if (scancode == LEFT_ARROW) {
             // 左鍵：光標向左移動
@@ -516,7 +510,6 @@ static void keyboard_callback(registers_t *regs){
         }
     }else if (scancode == TAB){
         // Tab 自動補全
-        begin_input_line_if_needed();
         const char* match = find_command_match(key_buffer);
         if (match != NULL) {
             complete_and_display(match);
@@ -541,7 +534,8 @@ static void keyboard_callback(registers_t *regs){
         key_buffer[0]='\0';
         current_input[0]='\0'; // 清除當前輸入緩存
         cursor_position = 0; // 重置光標位置
-        input_line_active = 0;
+        // Update input line start to current cursor position (after prompt)
+        input_line_start_offset = get_cursor_offset();
         // 重置歷史記錄索引
         history_index = -1;
     } else{
@@ -553,7 +547,6 @@ static void keyboard_callback(registers_t *regs){
         }
         
         if (letter != '?') { // 只處理有效的 ASCII 字元
-            begin_input_line_if_needed();
             int was_browsing_history = (history_index != -1);
             
             // 如果正在瀏覽歷史記錄，開始編輯時退出歷史瀏覽模式

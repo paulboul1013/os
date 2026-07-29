@@ -36,6 +36,7 @@ void syscall_handler(registers_t *r){
                 break;
             }
 
+            keyboard_prepare_input_line();
             scheduler_disable();
             while (!kbd_line_ready) {
                 asm volatile("sti; hlt; cli");
