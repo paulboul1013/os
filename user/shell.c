@@ -90,11 +90,11 @@ void user_shell_main(void) {
     
     sys_clear();
     sys_write("\n===============================\n");
-    sys_write("    ZenkOS Ring 3 User Shell\n");
+    sys_write("    OS Ring 3 User Shell\n");
     sys_write("===============================\n");
 
     while (1) {
-        sys_write("user@zenkos> ");
+        sys_write("user@os> ");
         
         sys_read(buf, 256); // Block until ENTER is pressed
         
