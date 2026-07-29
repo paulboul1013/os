@@ -49,10 +49,16 @@ void keyboard_prepare_input_line() {
     input_line_start_offset = get_cursor_offset();
 }
 
+static int input_line_capacity() {
+    int col = (input_line_start_offset / 2) % MAX_COLS;
+    return MAX_COLS - col - 1;
+}
+
 // 在光標位置插入字符
 static void insert_char_at_cursor(char c) {
     int len = strlen(key_buffer);
     if (len >= 255) return; // 緩衝區已滿
+    if (len >= input_line_capacity()) return;
     
     // 將光標位置之後的字符向後移動
     int i;
@@ -242,6 +248,7 @@ static void clear_and_display(const char* text) {
     int j = 0;
     if (text != NULL) {
         while (text[j] != '\0' && j < 255) {
+            if (j >= input_line_capacity()) break;
             key_buffer[j] = text[j];
             j++;
         }
