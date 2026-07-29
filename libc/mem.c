@@ -14,14 +14,22 @@ void memory_set(uint8_t *dest, uint8_t val, uint32_t len) {
     }
 }
 
-#define HEAP_START 0x10000
 #define HEAP_MAX_ADDR 0x80000 // Limit heap to 512KB for now to stay below VGA buffer (0xB8000)
 
-static header_t *free_list = (header_t*)HEAP_START;
+extern uint8_t __bss_end;
+
+static header_t *free_list = NULL;
 static int is_init = 0;
 
 void mem_init() {
-    free_list->size = HEAP_MAX_ADDR - HEAP_START;
+    uint32_t heap_start = ((uint32_t)&__bss_end + 0xFFF) & 0xFFFFF000;
+    if (heap_start >= HEAP_MAX_ADDR) {
+        is_init = 1;
+        return;
+    }
+
+    free_list = (header_t*)heap_start;
+    free_list->size = HEAP_MAX_ADDR - heap_start;
     free_list->is_free = 1;
     free_list->next = NULL;
     is_init = 1;
