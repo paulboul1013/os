@@ -101,6 +101,8 @@ void schedule(void) {
 
 // Timer interrupt handler for preemptive scheduling
 void scheduler_timer_handler(registers_t *regs) {
-    UNUSED(regs);
+    if (regs && (regs->cs & 0x3) != 0) {
+        return;
+    }
     schedule();
 }

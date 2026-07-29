@@ -1,8 +1,10 @@
 #include "syscall.h"
 #include "../cpu/idt.h"
 #include "../drivers/screen.h"
+#include "../drivers/keyboard.h"
 #include "../cpu/timer.h"
 #include "../cpu/task.h"
+#include "../cpu/scheduler.h"
 
 extern void syscall_stub(void);
 
@@ -26,6 +28,32 @@ void syscall_handler(registers_t *r){
             break;
         }
 
+        case SYS_READ: {
+            char *buf = (char*)(uintptr_t)r->ebx;
+            uint32_t len = r->ecx;
+            if (!buf || len == 0) {
+                r->eax = (uint32_t)-1;
+                break;
+            }
+
+            scheduler_disable();
+            while (!kbd_line_ready) {
+                asm volatile("sti; hlt; cli");
+            }
+            scheduler_enable();
+
+            uint32_t i = 0;
+            while (i + 1 < len && kbd_line_buffer[i] != '\0') {
+                buf[i] = kbd_line_buffer[i];
+                i++;
+            }
+            buf[i] = '\0';
+            kbd_line_ready = 0;
+            kbd_line_buffer[0] = '\0';
+            r->eax = i;
+            break;
+        }
+
         case SYS_GETPID:
             r->eax=task_current()->pid;
             break;
@@ -35,8 +63,18 @@ void syscall_handler(registers_t *r){
             r->eax=0;
             break;
 
+        case SYS_CLEAR:
+            clear_screen();
+            r->eax = 0;
+            break;
+
+        case SYS_YIELD:
+            task_yield();
+            r->eax = 0;
+            break;
+
         default:
-            kprint("[syscall] Unkown syscall: ");
+            kprint("[syscall] Unknown syscall\n");
             r->eax=(uint32_t)-1; //return -1 (error)
             break;
 
