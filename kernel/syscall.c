@@ -5,6 +5,7 @@
 #include "../cpu/timer.h"
 #include "../cpu/task.h"
 #include "../cpu/scheduler.h"
+#include "../fs/fs.h"
 
 extern void syscall_stub(void);
 
@@ -72,6 +73,31 @@ void syscall_handler(registers_t *r){
         case SYS_YIELD:
             task_yield();
             r->eax = 0;
+            break;
+
+        case SYS_FS_CREATE:
+            r->eax = fs_create((const char*)(uintptr_t)r->ebx);
+            break;
+
+        case SYS_FS_LIST:
+            fs_list();
+            r->eax = 0;
+            break;
+
+        case SYS_FS_READ:
+            r->eax = fs_read((const char*)(uintptr_t)r->ebx,
+                             (uint8_t*)(uintptr_t)r->ecx,
+                             r->edx);
+            break;
+
+        case SYS_FS_WRITE:
+            r->eax = fs_write((const char*)(uintptr_t)r->ebx,
+                              (const uint8_t*)(uintptr_t)r->ecx,
+                              r->edx);
+            break;
+
+        case SYS_FS_DELETE:
+            r->eax = fs_delete((const char*)(uintptr_t)r->ebx);
             break;
 
         default:

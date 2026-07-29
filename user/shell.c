@@ -57,6 +57,61 @@ static inline int sys_getpid(void) {
     return ret;
 }
 
+static inline int sys_fs_create(const char *name) {
+    int ret;
+    asm volatile(
+        "int $0x80\n"
+        : "=a"(ret)
+        : "a"(7), "b"(name)
+        : "memory"
+    );
+    return ret;
+}
+
+static inline int sys_fs_list(void) {
+    int ret;
+    asm volatile(
+        "int $0x80\n"
+        : "=a"(ret)
+        : "a"(8)
+        : "memory"
+    );
+    return ret;
+}
+
+static inline int sys_fs_read(const char *name, char *buf, int len) {
+    int ret;
+    asm volatile(
+        "int $0x80\n"
+        : "=a"(ret)
+        : "a"(9), "b"(name), "c"(buf), "d"(len)
+        : "memory"
+    );
+    return ret;
+}
+
+static inline int sys_fs_write(const char *name, const char *data, int len) {
+    int ret;
+    asm volatile(
+        "int $0x80\n"
+        : "=a"(ret)
+        : "a"(10), "b"(name), "c"(data), "d"(len)
+        : "memory"
+    );
+    return ret;
+}
+
+static inline int sys_fs_delete(const char *name) {
+    int ret;
+    asm volatile(
+        "int $0x80\n"
+        : "=a"(ret)
+        : "a"(11), "b"(name)
+        : "memory"
+    );
+    return ret;
+}
+
 // User-space strcmp
 static int user_strcmp(const char *s1, const char *s2) {
     while(*s1 && (*s1 == *s2)) {
@@ -64,6 +119,35 @@ static int user_strcmp(const char *s1, const char *s2) {
         s2++;
     }
     return *(const unsigned char*)s1 - *(const unsigned char*)s2;
+}
+
+static int user_strlen(const char *s) {
+    int len = 0;
+    while (s[len] != '\0') len++;
+    return len;
+}
+
+static int user_startswith(const char *s, const char *prefix) {
+    while (*prefix) {
+        if (*s != *prefix) return 0;
+        s++;
+        prefix++;
+    }
+    return 1;
+}
+
+static int split_once(char *s, char **left, char **right) {
+    int i = 0;
+    while (s[i] != '\0') {
+        if (s[i] == ' ') {
+            s[i] = '\0';
+            *left = s;
+            *right = s + i + 1;
+            return (**left != '\0' && **right != '\0');
+        }
+        i++;
+    }
+    return 0;
 }
 
 // User-space itoa
@@ -103,7 +187,7 @@ void user_shell_main(void) {
         }
 
         if (user_strcmp(buf, "help") == 0 || user_strcmp(buf, "?") == 0) {
-            sys_write("Commands: help, clear, pid, echo <text>, exit\n");
+            sys_write("Commands: help, clear, pid, echo <text>, ls, touch <file>, cat <file>, write <file> <text>, rm <file>, exit\n");
         } else if (user_strcmp(buf, "clear") == 0) {
             sys_clear();
         } else if (user_strcmp(buf, "pid") == 0) {
@@ -119,6 +203,48 @@ void user_shell_main(void) {
         } else if (buf[0] == 'e' && buf[1] == 'c' && buf[2] == 'h' && buf[3] == 'o' && buf[4] == ' ') {
             sys_write(&buf[5]);
             sys_write("\n");
+        } else if (user_strcmp(buf, "ls") == 0) {
+            sys_fs_list();
+        } else if (user_startswith(buf, "touch ")) {
+            int ret = sys_fs_create(buf + 6);
+            if (ret == 0) {
+                sys_write("created\n");
+            } else {
+                sys_write("touch failed\n");
+            }
+        } else if (user_startswith(buf, "cat ")) {
+            char file_buf[512];
+            int ret = sys_fs_read(buf + 4, file_buf, sizeof(file_buf) - 1);
+            if (ret >= 0) {
+                file_buf[ret] = '\0';
+                sys_write(file_buf);
+                sys_write("\n");
+            } else {
+                sys_write("cat failed\n");
+            }
+        } else if (user_startswith(buf, "write ")) {
+            char *name;
+            char *content;
+            if (!split_once(buf + 6, &name, &content)) {
+                sys_write("usage: write <file> <text>\n");
+                continue;
+            }
+            if (sys_fs_create(name) != 0) {
+                /* Existing files are overwritten; other errors are reported by write. */
+            }
+            int ret = sys_fs_write(name, content, user_strlen(content));
+            if (ret == 0) {
+                sys_write("written\n");
+            } else {
+                sys_write("write failed\n");
+            }
+        } else if (user_startswith(buf, "rm ")) {
+            int ret = sys_fs_delete(buf + 3);
+            if (ret == 0) {
+                sys_write("deleted\n");
+            } else {
+                sys_write("rm failed\n");
+            }
         } else {
             sys_write("Unknown command: ");
             sys_write(buf);

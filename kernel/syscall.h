@@ -11,6 +11,11 @@
 #define SYS_GETPID  4
 #define SYS_CLEAR   5
 #define SYS_YIELD   6
+#define SYS_FS_CREATE 7
+#define SYS_FS_LIST   8
+#define SYS_FS_READ   9
+#define SYS_FS_WRITE  10
+#define SYS_FS_DELETE 11
 
 // mount int 0x80
 void syscall_init(void);
