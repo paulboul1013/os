@@ -10,9 +10,13 @@ typedef struct {
     uint32_t present    : 1;   // 頁面是否在記憶體中
     uint32_t rw         : 1;   // 0: 唯讀, 1: 讀寫
     uint32_t user       : 1;   // 0: 核心權限, 1: 用戶權限
-    uint32_t accessed   : 1;   // 是否被存取過
-    uint32_t dirty      : 1;   // 是否被寫入過 (僅對 PTE 有效)
-    uint32_t unused     : 7;   // 保留位
+    uint32_t write_through : 1;
+    uint32_t cache_disable : 1;
+    uint32_t accessed : 1;
+    uint32_t dirty : 1;
+    uint32_t pat : 1;
+    uint32_t global : 1;
+    uint32_t unused : 3;
     uint32_t frame_addr : 20;  // 實體頁框地址 (高 20 位)
 } page_t;
 
@@ -25,8 +29,6 @@ typedef struct {
 typedef struct {
     // 實體地址 entry (用於 CPU)
     uint32_t entries[1024]; 
-    // 為了方便管理，我們可以額外存儲 Page Table 的虛擬地址 (如果是靜態分配的話)
-    page_table_t* tables[1024]; 
 } page_directory_t;
 
 // 自我引用 (Recursive Mapping) 常量
@@ -34,6 +36,9 @@ typedef struct {
 #define PAGE_RECURSIVE_SLOT 1023
 #define PAGE_METADATA_BASE 0xFFC00000
 #define PAGE_DIRECTORY_BASE (PAGE_METADATA_BASE + (PAGE_RECURSIVE_SLOT * 0x1000))
+
+int paging_user_access(uint32_t address, int write);
+void paging_set_user_stack(uint32_t address, int enabled);
 
 // 初始化分頁系統
 void init_paging();

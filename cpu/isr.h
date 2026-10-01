@@ -93,4 +93,6 @@ void irq_install();
 typedef void (*isr_t)(registers_t *);
 void register_interrupt_handler(uint8_t n, isr_t handler);
 
+void exception_fault(registers_t *r) __attribute__((noreturn));
+
 #endif

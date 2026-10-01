@@ -4,7 +4,7 @@ static inline void sys_write(const char *str) {
         "movl %0, %%ebx\n" // 字串指標
         "int $0x80\n"
         :: "r"(str)
-        : "eax", "ebx"
+        : "eax", "ebx", "memory", "cc"
     );
 }
 
@@ -14,7 +14,7 @@ static inline void sys_exit(int code) {
         "movl %0, %%ebx\n" // 返回碼
         "int $0x80\n"
         :: "r"(code)
-        : "eax", "ebx"
+        : "eax", "ebx", "memory", "cc"
     );
 }
 

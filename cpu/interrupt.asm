@@ -231,8 +231,6 @@ isr16:
 
 ; 17: Alignment Check Exception
 isr17:
-    
-    push byte 0
     push byte 17
     jmp isr_common_stub
 

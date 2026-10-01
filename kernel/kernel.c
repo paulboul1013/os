@@ -22,6 +22,11 @@ __attribute__((constructor)) void test_constructor() {
 
 extern uintptr_t __stack_chk_guard;
 
+extern void user_shell_main(void);
+#ifndef PROTECTION_TEST
+static void shell_init_wrapper(void) { lauch_user_task(user_shell_main); }
+#endif
+
 void kernel_main(){
     // simple "randomness" by mixing some bits (could be improved)
     __stack_chk_guard = __stack_chk_guard ^ (uintptr_t)&kernel_main;
@@ -60,14 +65,19 @@ void kernel_main(){
     // Initialize file system
     fs_init();
 
+#ifdef PROTECTION_PANIC
+    /* A supervisor write to user text must panic, never kill a user task. */
+    extern char __user_text_start;
+    *(volatile char*)&__user_text_start = 0;
+#endif
+
     kprint("Initializing Multitasking scheduler and User Space Shell...\n");
-    // 新增一個 Shell Wrapper Task，當它被排程到時，就會切換進 Ring 3
-    extern void user_shell_main(void);
-    void shell_init_wrapper(void) {
-        lauch_user_task(user_shell_main);
-    }
-    
+#ifdef PROTECTION_TEST
+    extern void protection_tests(void);
+    task_create(protection_tests);
+#else
     task_create(shell_init_wrapper);
+#endif
     scheduler_enable(); // 啟動排程器（底層由 PIT Timer Driver 推動）
 
     // 讓原來的 kernel_main 退化為 Idle Process

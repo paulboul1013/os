@@ -8,7 +8,7 @@ static inline void sys_write(const char *str) {
         "movl %0, %%ebx\n"
         "int $0x80\n"
         :: "r"(str)
-        : "eax", "ebx"
+        : "eax", "ebx", "memory", "cc"
     );
 }
 
@@ -22,7 +22,7 @@ static inline int sys_read(char *buf, int len) {
         "movl %%eax, %0\n"
         : "=r"(ret)
         : "r"(buf), "r"(len)
-        : "eax", "ebx", "ecx"
+        : "eax", "ebx", "ecx", "memory", "cc"
     );
     return ret;
 }
@@ -33,7 +33,7 @@ static inline void sys_exit(int code) {
         "movl %0, %%ebx\n"
         "int $0x80\n"
         :: "r"(code)
-        : "eax", "ebx"
+        : "eax", "ebx", "memory", "cc"
     );
 }
 
@@ -41,7 +41,7 @@ static inline void sys_clear(void) {
     asm volatile(
         "movl $5, %%eax\n"
         "int $0x80\n"
-        ::: "eax"
+        ::: "eax", "memory", "cc"
     );
 }
 
@@ -52,7 +52,7 @@ static inline int sys_getpid(void) {
         "int $0x80\n"
         "movl %%eax, %0\n"
         : "=r"(ret)
-        :: "eax"
+        :: "eax", "memory", "cc"
     );
     return ret;
 }
@@ -63,7 +63,7 @@ static inline int sys_fs_create(const char *name) {
         "int $0x80\n"
         : "=a"(ret)
         : "a"(7), "b"(name)
-        : "memory"
+        : "memory", "cc"
     );
     return ret;
 }
@@ -74,7 +74,7 @@ static inline int sys_fs_list(void) {
         "int $0x80\n"
         : "=a"(ret)
         : "a"(8)
-        : "memory"
+        : "memory", "cc"
     );
     return ret;
 }
@@ -85,7 +85,7 @@ static inline int sys_fs_read(const char *name, char *buf, int len) {
         "int $0x80\n"
         : "=a"(ret)
         : "a"(9), "b"(name), "c"(buf), "d"(len)
-        : "memory"
+        : "memory", "cc"
     );
     return ret;
 }
@@ -96,7 +96,7 @@ static inline int sys_fs_write(const char *name, const char *data, int len) {
         "int $0x80\n"
         : "=a"(ret)
         : "a"(10), "b"(name), "c"(data), "d"(len)
-        : "memory"
+        : "memory", "cc"
     );
     return ret;
 }
@@ -107,7 +107,7 @@ static inline int sys_fs_delete(const char *name) {
         "int $0x80\n"
         : "=a"(ret)
         : "a"(11), "b"(name)
-        : "memory"
+        : "memory", "cc"
     );
     return ret;
 }

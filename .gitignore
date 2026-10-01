@@ -4,3 +4,6 @@
 *.gdb_history
 *.elf
 
+
+*.map
+__pycache__/

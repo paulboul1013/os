@@ -1,5 +1,8 @@
 #include "usermode.h"
 #include "gdt.h"
+#include "task.h"
+#include "pmm.h"
+#include "paging.h"
 #include "../libc/mem.h"
 
 #define USER_STACK_SIZE 4096
@@ -21,8 +24,7 @@ void enter_usermode(void *user_entry,uint32_t user_esp) {
     asm volatile(
         "pushl %0\n"       // SS = User Data Selector
         "pushl %1\n"       // ESP = User stack pointer
-        "pushf\n"          // EFLAGS（keep current flags）
-        "orl $0x200, (%%esp)\n" // 確保 IF=1（允許中斷）
+        "pushl $0x202\n"
         "pushl %2\n"       // CS = User Code Selector
         "pushl %3\n"       // EIP = 用戶程式入口
         "iret\n"
@@ -35,10 +37,15 @@ void enter_usermode(void *user_entry,uint32_t user_esp) {
 
 
 void lauch_user_task(void (*entry)(void)) {
-    //allocate user stack
-    uint8_t *user_stack = (uint8_t*)kmalloc(USER_STACK_SIZE, 0, NULL);
-    uint32_t user_esp =(uint32_t)(user_stack+USER_STACK_SIZE);
-
-
-    enter_usermode((void*)entry,user_esp);
+    asm volatile("cli" ::: "memory");
+    uint32_t stack = pmm_alloc_frame();
+    if (!stack || stack >= 0x800000) {
+        if (stack) pmm_free_frame(stack);
+        task_exit();
+    }
+    task_current()->user_stack = stack;
+    memory_set((uint8_t*)stack, 0, USER_STACK_SIZE);
+    paging_set_user_stack(stack, 1);
+    enter_usermode((void*)entry, stack + USER_STACK_SIZE);
+    __builtin_unreachable();
 }

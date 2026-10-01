@@ -9,51 +9,28 @@
 static page_directory_t *kernel_directory = NULL;
 static page_directory_t *current_directory = NULL;
 
-extern void load_page_directory(uint32_t);
-extern void enable_paging();
-
-void page_fault_handler(registers_t *regs) {
-    // 發生錯誤的地址存放在 CR2 暫存器中
-    uint32_t faulting_address;
-    asm volatile("mov %%cr2, %0" : "=r" (faulting_address));
-
-    // 錯誤碼中包含了錯誤發生的細節
-    int present   = !(regs->err_code & 0x1); // Page not present
-    int rw        = regs->err_code & 0x2;           // Write operation?
-    int us        = regs->err_code & 0x4;           // Processor was in user-mode?
-    int reserved  = regs->err_code & 0x8;           // Overwritten CPU-reserved bits?
-    int id        = regs->err_code & 0x10;          // Caused by an instruction fetch?
-    kprint("PAGE FAULT ( ");
-
-    if (present) kprint("not-present ");
-    if (rw) kprint("read-only ");
-    if (us) kprint("user-mode ");
-    if (reserved) kprint("reserved ");
-    if (id) kprint("instr-fetch ");
-    (void)id; // 消除編譯器警告
-    kprint(") at "); // hex_to_ascii 會自帶 0x
-
-    char buf[32];
-    hex_to_ascii(faulting_address, buf);
-    kprint(buf);
-    kprint("\n");
-    
-    asm volatile("hlt");
+static uint32_t paging_frame(void) {
+    uint32_t frame = pmm_alloc_frame();
+    if (!frame || frame >= 0x800000) {
+        kprint("KERNEL PANIC: page table allocation failed\n");
+        for (;;) asm volatile("cli; hlt");
+    }
+    return frame;
 }
 
-
+void page_fault_handler(registers_t *regs) {
+    exception_fault(regs);
+}
 
 void init_paging() {
     // 分配 Page Directory
-    // 注意：page_directory_t 包含 entries 和 tables 陣列，約 8KB，需要分配 2 個 frames
-    kernel_directory = (page_directory_t*)pmm_alloc_frame();
-    pmm_alloc_frame(); // 額外佔下一頁，防止 tables 陣列覆蓋到其他資料
+    kernel_directory = (page_directory_t*)paging_frame();
     memory_set((uint8_t*)kernel_directory, 0, sizeof(page_directory_t));
     
     // 初始化 Page Tables，映射前 8MB (2 個 Page Tables)
     // 這樣可以涵蓋稍後可能擴展的 stack 或核心區
     for (uint32_t j = 0; j < 2; j++) {
-        uint32_t pt_phys = pmm_alloc_frame();
+        uint32_t pt_phys = paging_frame();
         page_table_t *pt = (page_table_t*)pt_phys;
         memory_set((uint8_t*)pt, 0, sizeof(page_table_t));
 
@@ -62,12 +39,22 @@ void init_paging() {
             pt->pages[i].frame_addr = frame_idx;
             pt->pages[i].present = 1;
             pt->pages[i].rw = 1;
-            pt->pages[i].user = 1; // 允許 User mode (Ring 3) 存取
+            pt->pages[i].user = 0; // Supervisor by default
         }
         // 放入 PD 的對應項
         kernel_directory->entries[j] = pt_phys | 0x7; // Present | R/W | User
     }
     
+    extern char __user_text_start, __user_rodata_end;
+    extern char __user_data_start, __user_data_end;
+    for (uint32_t a = (uint32_t)&__user_text_start; a < (uint32_t)&__user_rodata_end; a += PAGE_SIZE) {
+        page_t *p = get_page(a, 0, kernel_directory);
+        p->user = 1; p->rw = 0;
+    }
+    for (uint32_t a = (uint32_t)&__user_data_start; a < (uint32_t)&__user_data_end; a += PAGE_SIZE) {
+        get_page(a, 0, kernel_directory)->user = 1;
+    }
+
     // 自我引用 (Recursive Mapping)
     kernel_directory->entries[PAGE_RECURSIVE_SLOT] = (uint32_t)kernel_directory | 0x3;
 
@@ -86,7 +73,7 @@ void switch_page_directory(page_directory_t* dir) {
     asm volatile("mov %0, %%cr3" :: "r"((uint32_t)dir));
     uint32_t cr0;
     asm volatile("mov %%cr0, %0" : "=r"(cr0));
-    cr0 |= 0x80000000; // 開啟 PG bit
+    cr0 |= 0x80010000; // PG + WP: supervisor writes also honor read-only PTEs
     asm volatile("mov %0, %%cr0" :: "r"(cr0));
 }
 
@@ -101,7 +88,7 @@ page_t* get_page(uint32_t address, int make, page_directory_t* dir) {
         page_table_t *table = (page_table_t*)(dir->entries[pd_idx] & 0xFFFFF000);
         return &table->pages[page_idx % 1024];
     } else if (make) {
-        uint32_t pt_phys = pmm_alloc_frame();
+        uint32_t pt_phys = paging_frame();
         dir->entries[pd_idx] = pt_phys | 0x7; // Present | R/W | User
         page_table_t *table = (page_table_t*)pt_phys;
         memory_set((uint8_t*)table, 0, sizeof(page_table_t));
@@ -109,4 +96,17 @@ page_t* get_page(uint32_t address, int make, page_directory_t* dir) {
     }
 
     return NULL;
+}
+
+int paging_user_access(uint32_t address, int write) {
+    uint32_t pde = current_directory->entries[address >> 22];
+    if ((pde & 5) != 5 || (pde & 0x80) || (write && !(pde & 2))) return 0;
+    page_t *p = get_page(address, 0, current_directory);
+    return p && p->present && p->user && (!write || p->rw);
+}
+void paging_set_user_stack(uint32_t address, int enabled) {
+    page_t *p = get_page(address, 0, current_directory);
+    p->user = enabled != 0;
+    p->rw = 1;
+    asm volatile("invlpg (%0)" :: "r"(address) : "memory");
 }

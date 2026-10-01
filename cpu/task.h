@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define KERNEL_STACK_SIZE 4096  // 4KB stack per task
+#define KERNEL_STACK_SIZE 8192  // Includes bounded syscall staging buffers
 #define MAX_TASKS 32
 
 // Task states
@@ -20,6 +20,7 @@ typedef struct pcb {
     task_state_t state;              // Current state
     uint32_t esp;                    // Saved stack pointer
     uint32_t kernel_stack;           // Base of allocated stack (for kfree)
+    uint32_t user_stack;
     uint32_t kernel_stack_top;       // Top of stack (high address)
     void (*entry_point)(void);       // Task entry function
     struct pcb *next;                // For scheduler linked list
@@ -32,7 +33,8 @@ void task_init(void);
 pcb_t* task_create(void (*entry)(void));
 
 // Terminate current task
-void task_exit(void);
+void task_exit(void) __attribute__((noreturn));
+void task_reap(void);
 
 // Get current running task
 pcb_t* task_current(void);

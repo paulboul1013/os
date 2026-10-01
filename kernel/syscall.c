@@ -6,6 +6,7 @@
 #include "../cpu/task.h"
 #include "../cpu/scheduler.h"
 #include "../fs/fs.h"
+#include "../cpu/usercopy.h"
 
 extern void syscall_stub(void);
 
@@ -13,97 +14,75 @@ void syscall_init(void){
     set_idt_gate(0x80,(uint32_t)syscall_stub);
 }
 
-void syscall_handler(registers_t *r){
-    uint32_t syscall_num = r->eax;
+/* Buffers live on each task's supervisor stack, never in shared user memory. */
+static int file_syscall(registers_t *r) {
+    char name[FS_MAX_FILENAME];
+    uint8_t data[FS_MAX_FILESIZE];
+    int result = copy_string_from_user(name, (const char*)r->ebx, sizeof(name));
+    if (result) return result;
+    switch (r->eax) {
+        case SYS_FS_CREATE: return fs_create(name);
+        case SYS_FS_DELETE: return fs_delete(name);
+        case SYS_FS_WRITE:
+            if (!user_range_valid((void*)r->ecx, r->edx, 0)) return USER_EFAULT;
+            if (r->edx > sizeof(data)) return FS_ERR_OVERFLOW;
+            result = copy_from_user(data, (void*)r->ecx, r->edx);
+            return result ? result : fs_write(name, data, r->edx);
+        default:
+            if (!user_range_valid((void*)r->ecx, r->edx, 1)) return USER_EFAULT;
+            result = fs_read(name, data, r->edx < sizeof(data) ? r->edx : sizeof(data));
+            if (result < 0) return result;
+            int copied = copy_to_user((void*)r->ecx, data, result);
+            return copied ? copied : result;
+    }
+}
 
-    switch (syscall_num) {
-        case SYS_EXIT:
-            kprint("[syscall] exit()\n");
-            task_exit();
-            break;
-
+void syscall_handler(registers_t *r) {
+    switch (r->eax) {
+        case SYS_EXIT: task_exit();
         case SYS_WRITE: {
-            char *str=(char*)(uintptr_t)r->ebx;
-            kprint(str);
-            r->eax=0;
+            char text[USER_STRING_MAX];
+            int error = copy_string_from_user(text, (const char*)r->ebx, sizeof(text));
+            if (!error) kprint(text);
+            r->eax = error;
             break;
         }
-
         case SYS_READ: {
-            char *buf = (char*)(uintptr_t)r->ebx;
             uint32_t len = r->ecx;
-            if (!buf || len == 0) {
-                r->eax = (uint32_t)-1;
+            if (!len) { r->eax = (uint32_t)-1; break; }
+            if (!user_range_valid((void*)r->ebx, len, 1)) {
+                r->eax = USER_EFAULT;
                 break;
             }
-
             keyboard_prepare_input_line();
             scheduler_disable();
-            while (!kbd_line_ready) {
-                asm volatile("sti; hlt; cli");
-            }
+            while (!kbd_line_ready) asm volatile("sti; hlt; cli");
             scheduler_enable();
-
             uint32_t i = 0;
-            while (i + 1 < len && kbd_line_buffer[i] != '\0') {
-                buf[i] = kbd_line_buffer[i];
-                i++;
-            }
-            buf[i] = '\0';
+            while (i + 1 < len && kbd_line_buffer[i]) i++;
+            /* Copy only available bytes and a terminator, after full validation. */
+            char text[256];
+            for (uint32_t j = 0; j < i; j++) text[j] = kbd_line_buffer[j];
+            text[i] = 0;
+            int error = copy_to_user((void*)r->ebx, text, i + 1);
             kbd_line_ready = 0;
-            kbd_line_buffer[0] = '\0';
-            r->eax = i;
+            kbd_line_buffer[0] = 0;
+            r->eax = error ? (uint32_t)error : i;
             break;
         }
-
-        case SYS_GETPID:
-            r->eax=task_current()->pid;
-            break;
-
+        case SYS_GETPID: r->eax = task_current()->pid; break;
         case SYS_SLEEP:
             sleep(r->ebx);
-            r->eax=0;
-            break;
-
-        case SYS_CLEAR:
-            clear_screen();
+            asm volatile("cli" ::: "memory");
             r->eax = 0;
             break;
-
-        case SYS_YIELD:
-            task_yield();
-            r->eax = 0;
-            break;
-
+        case SYS_CLEAR: clear_screen(); r->eax = 0; break;
+        case SYS_YIELD: task_yield(); r->eax = 0; break;
+        case SYS_FS_LIST: fs_list(); r->eax = 0; break;
         case SYS_FS_CREATE:
-            r->eax = fs_create((const char*)(uintptr_t)r->ebx);
-            break;
-
-        case SYS_FS_LIST:
-            fs_list();
-            r->eax = 0;
-            break;
-
         case SYS_FS_READ:
-            r->eax = fs_read((const char*)(uintptr_t)r->ebx,
-                             (uint8_t*)(uintptr_t)r->ecx,
-                             r->edx);
-            break;
-
         case SYS_FS_WRITE:
-            r->eax = fs_write((const char*)(uintptr_t)r->ebx,
-                              (const uint8_t*)(uintptr_t)r->ecx,
-                              r->edx);
-            break;
-
-        case SYS_FS_DELETE:
-            r->eax = fs_delete((const char*)(uintptr_t)r->ebx);
-            break;
-
-        default:
-            kprint("[syscall] Unknown syscall\n");
-            r->eax=(uint32_t)-1; //return -1 (error)
-            break;
-
+        case SYS_FS_DELETE: r->eax = file_syscall(r); break;
+        default: r->eax = (uint32_t)-1; break;
     }
 }

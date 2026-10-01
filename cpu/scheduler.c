@@ -49,9 +49,12 @@ void scheduler_disable(void) {
 
 // Round-robin scheduler
 void schedule(void) {
-    if (!scheduler_enabled) return;
-    if (task_count <= 1) return;
-    if (!current_task) return;
+    uint32_t flags;
+    asm volatile("pushf; pop %0; cli" : "=r"(flags) :: "memory");
+    task_reap();
+    if (!scheduler_enabled) goto done;
+    if (task_count <= 1) goto done;
+    if (!current_task) goto done;
 
     pcb_t *old_task = current_task;
     pcb_t *next_task = 0;
@@ -81,7 +84,17 @@ void schedule(void) {
     } while (candidate != start);
 
     // No other task to switch to
-    if (!next_task || next_task == old_task) return;
+    if (!next_task || next_task == old_task) goto done;
+
+    if (old_task->state == TASK_TERMINATED) {
+        pcb_t *previous = 0;
+        for (pcb_t *p = ready_queue_head; p != old_task; p = p->next) previous = p;
+        if (previous) previous->next = old_task->next;
+        else ready_queue_head = old_task->next;
+        if (ready_queue_tail == old_task) ready_queue_tail = previous;
+        old_task->next = 0;
+        task_count--;
+    }
 
     // Update states
     if (old_task->state == TASK_RUNNING) {
@@ -97,6 +110,9 @@ void schedule(void) {
 
     // Perform context switch
     context_switch(&old_task->esp, next_task->esp);
+    task_reap();
+done:
+    asm volatile("push %0; popf" :: "r"(flags) : "memory", "cc");
 }
 
 // Timer interrupt handler for preemptive scheduling

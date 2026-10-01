@@ -24,15 +24,16 @@ disk_load:
     mov dh, [CURRENT_HEAD]
     mov dl, [DISK_DRIVE]
 
+    push es
     push bx
     int 0x13
     pop bx
+    pop es
 
     pushf
     push ax
     xor ax, ax
     mov ds, ax
-    mov es, ax
     pop ax
     popf
     jc disk_error
@@ -41,6 +42,11 @@ disk_load:
     jne sectors_error
 
     add bx, 512
+    jnc .buffer_ready
+    mov ax, es
+    add ax, 0x1000
+    mov es, ax
+.buffer_ready:
     dec byte [SECTORS_LEFT]
     inc byte [CURRENT_SECTOR]
     cmp byte [CURRENT_SECTOR], 19

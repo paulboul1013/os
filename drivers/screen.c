@@ -36,10 +36,16 @@ void kprint_at(const char *message,int col,int row){
 }
 
 void kprint(const char *message){
+#if defined(PROTECTION_TEST) || defined(DEBUG_CONSOLE)
+    for (const char *p = message; *p; p++) port_byte_out(0xe9, *p);
+#endif
     kprint_at(message,-1,-1);
 }
 
 void kputchar(char c) {
+#if defined(PROTECTION_TEST) || defined(DEBUG_CONSOLE)
+    port_byte_out(0xe9, c);
+#endif
     print_char(c, -1, -1, WHITE_ON_BLACK);
 }
 

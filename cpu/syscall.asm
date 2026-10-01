@@ -21,6 +21,7 @@ syscall_stub:
 
     ; call c handler function，pass into register status pointer
     push esp        ; pass registers_t * to syscall_handler
+    cld
     call syscall_handler
     add esp, 4      ; clean parameter
 

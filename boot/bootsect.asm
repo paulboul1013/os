@@ -1,6 +1,8 @@
 [org 0x7c00]
 KERNEL_OFFSET equ 0x8000; the same used when linking the kernel
-KERNEL_SECTORS equ 64
+%ifndef KERNEL_SECTORS
+%define KERNEL_SECTORS 128
+%endif
 
 xor ax, ax
 mov ds, ax

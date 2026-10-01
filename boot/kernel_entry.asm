@@ -2,6 +2,13 @@ global _start
 [bits 32]
 
 _start:
+    cld
+    extern __user_data_file_end, __bss_end
+    mov edi, __user_data_file_end
+    mov ecx, __bss_end
+    sub ecx, edi
+    xor eax, eax
+    rep stosb
     [extern call_global_constructors]
     call call_global_constructors
     

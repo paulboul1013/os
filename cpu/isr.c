@@ -5,6 +5,8 @@
 #include "../libc/string.h"
 #include "timer.h"
 #include "ports.h"
+#include "task.h"
+#include "../libc/stdio.h"
 
 
 isr_t interrupt_handlers[256];
@@ -123,13 +125,7 @@ void isr_handler(registers_t *r){
         isr_t handler = interrupt_handlers[r->int_no];
         handler(r);
     } else {
-        kprint("received interrupt: ");
-        char s[3];
-        int_to_ascii(r->int_no,s);
-        kprint(s);
-        kprint("\n");
-        kprint(exception_messages[r->int_no]);
-        kprint("\n");
+        exception_fault(r);
     }
 }
 
@@ -160,4 +156,22 @@ void irq_install() {
     init_timer(50);
     //IRQ1: keyboard
     init_keyboard();
+}
+void exception_fault(registers_t *r) {
+    uint32_t cr2 = 0;
+    if (r->int_no == 14) asm volatile("mov %%cr2, %0" : "=r"(cr2));
+    int user = (r->cs & 3) == 3 && r->int_no != 2 && r->int_no != 8 && r->int_no != 18;
+    char value[16];
+    kprint(user ? "USER FAULT pid=" : "KERNEL PANIC pid=");
+    int_to_ascii(task_current() ? task_current()->pid : 0, value); kprint(value);
+    kprint(" vector="); int_to_ascii(r->int_no, value); kprint(value);
+    kprint(" eip="); hex_to_ascii(r->eip, value); kprint(value);
+    kprint(" cr2="); hex_to_ascii(cr2, value); kprint(value);
+    kprint(" error="); hex_to_ascii(r->err_code, value); kprint(value); kprint("\n");
+#ifdef PROTECTION_TEST
+    extern void protection_fault_observed(registers_t*, uint32_t);
+    protection_fault_observed(r, cr2);
+#endif
+    if (user) task_exit();
+    for (;;) asm volatile("cli; hlt");
 }
