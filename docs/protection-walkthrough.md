@@ -43,13 +43,16 @@ sequenceDiagram
     participant U as Ring 3 shell
     participant CPU as CPU／IDT／TSS
     participant K as Ring 0 syscall handler
+    participant Q as scheduler
     participant KB as 鍵盤 IRQ
     participant V as VGA driver
     U->>CPU: SYS_READ(buf, 256)，int 0x80
     CPU->>K: 改用本任務的核心 stack
     K->>K: 先檢查 user buffer 整段可寫
-    KB-->>K: IRQ1 收到 Enter，輸入行已就緒
-    K-->>U: copy_to_user，iret 回 Ring 3
+    K->>Q: 沒有完整行，阻塞 shell
+    KB-->>Q: IRQ1 收到 Enter，發布完整行並喚醒 shell
+    Q->>K: 日後恢復 shell 的核心 stack
+    K-->>U: copy_to_user 重新驗證，iret 回 Ring 3
     U->>U: 解析 echo hello
     U->>CPU: EAX=1, EBX=字串位址，int 0x80
     CPU->>K: 檢查 gate、改用本任務的核心 stack
@@ -62,7 +65,7 @@ shell 先經 `SYS_READ` 取得你輸入的一行。[鍵盤驅動](../drivers/key
 
 handler 不能直接把 EBX 當成可信的核心指標：user 可以故意填 `0x8000`，讓核心替它讀取核心資料。因此 `SYS_WRITE` 先呼叫 [copy_string_from_user()](../cpu/usercopy.c)，逐位址檢查、限制長度，複製到核心暫存區，才交給 `kprint`。檔案 syscall 的檔名與資料 buffer 也走同一個邊界；輸出 buffer 另外要檢查可寫。無效範圍回傳 `-14`，不應讓核心自己在解參考指標時 page fault。
 
-`SYS_READ` 的路徑相反：先確認 shell buffer 的**整段容量**都可寫，鍵盤完成輸入後用 `copy_to_user` 複製結果。等待輸入期間，這個教學 OS 仍會暫停整個 scheduler；這是目前尚待改進的阻塞設計。
+`SYS_READ` 的路徑相反：先確認 shell buffer 的**整段容量**都可寫；沒有完整行時只阻塞 shell，其他 task 照常排程。鍵盤完成輸入後喚醒 shell，`copy_to_user` 在複製時重新檢查 user 映射。詳見[阻塞與搶佔實作](blocking-wakeup-preemption-plan.md)。
 
 ## 非法路徑：Ring 3 讀 `0x8000` 時發生什麼？
 

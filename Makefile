@@ -77,6 +77,7 @@ boot/bootsect.bin: Makefile boot/disk.asm boot/print.asm boot/gdt.asm boot/32bit
 test: os-image.bin kernel.elf
 	NM="${NM}" python3 tests/check_layout.py
 	python3 tests/qemu_protection.py
+	python3 tests/qemu_scheduling.py
 	python3 tests/qemu_shell.py
 	python3 tests/qemu_panic.py
 

@@ -94,13 +94,13 @@ shell 啟動本身也會 clear/write/read，所以第一次停下不一定是你
 
 觀察任務切換可設 `break context_switch`，對照 ASM 的保存順序與 `task_create` 的初始 stack；頻繁 timer breakpoint 會干擾互動，完成後刪除斷點。
 
-## 自動保護回歸
+## 自動回歸
 
 ```sh
 make test
 ```
 
-需要 Python 3、QEMU 與交叉工具鏈；shell 測試使用本機 Unix QMP socket 注入鍵盤事件。各 QEMU 測試在暫存目錄編譯專用映像，不覆蓋平常啟動的映像。`make test` 包含 linker、user fault／syscall、shell 與 kernel panic 四類檢查，詳見[測試矩陣](user-protection.md#自動驗證)。
+需要 Python 3、QEMU 與交叉工具鏈；shell 與排程測試使用本機 Unix QMP socket 注入鍵盤事件。各 QEMU 測試在暫存目錄編譯專用映像，不覆蓋平常啟動的映像。`make test` 包含 linker、user fault／syscall、阻塞／搶佔／睡眠、shell 與 kernel panic 五類檢查，詳見[測試矩陣](user-protection.md#自動驗證)。
 
 ## 關書自測
 
@@ -112,8 +112,8 @@ make test
 | `ret` 與 `iret` 在此各出現在哪裡？ | 軟體 task context switch／中斷返回及進入 user mode |
 | syscall 後一定換 PID 嗎？ | 不一定；切權限與排程是兩件事 |
 | Ring 3 直接碰核心資料會怎樣？ | supervisor PTE 觸發 #PF；只終止故障 user task。其他 user 任務仍共享 user pages |
-| 為什麼一直在 Ring 3 計算的程式不會被 timer 換走？ | scheduler 的 CS 檢查直接返回 |
-| 為什麼等待鍵盤會影響其他任務？ | SYS_READ 全域停用 scheduler |
+| Ring 3 的純計算迴圈如何被 timer 換走？ | IRQ frame 留在該 task 的核心 stack；schedule 更新 TSS 並切 ESP，日後由 iret 恢復 |
+| shell 等鍵盤時，其他任務為何仍能跑？ | SYS_READ 只把呼叫者設為 BLOCKED；Enter 發布完整行後將它改為 READY |
 | 有 RAM 檔案系統，是否就能從檔案執行程式？ | 還需要 executable loader 與對應的啟動／位址空間機制 |
 
 ## 文檔更新約定

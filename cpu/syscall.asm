@@ -8,9 +8,16 @@ syscall_stub:
     ; save all purpose registers
     pusha           ; push edi,esi,ebp,esp,ebx,edx,ecx,eax
     
-    ; registers_t 預期在這裡只有推入一個 32 bits 的 ds
+    ; DS starts registers_t; ES/FS/GS are private saves below that frame.
+    xor eax, eax
     mov ax, ds
-    push eax        ; 存下原本的使用者 ds (4 bytes)
+    push eax
+    mov ax, es
+    push eax
+    mov ax, fs
+    push eax
+    mov ax, gs
+    push eax
 
     ; switch to kernel data segment
     mov ax, 0x10    ; kernel data selector
@@ -20,17 +27,21 @@ syscall_stub:
     mov gs, ax
 
     ; call c handler function，pass into register status pointer
-    push esp        ; pass registers_t * to syscall_handler
+    lea eax, [esp + 12]
+    push eax        ; pass pointer to registers_t.ds
     cld
     call syscall_handler
     add esp, 4      ; clean parameter
 
     ; restore segment registers
-    pop eax         ; 彈出原本的 ds
-    mov ds, ax      
-    mov es, ax
-    mov fs, ax
+    pop eax
     mov gs, ax
+    pop eax
+    mov fs, ax
+    pop eax
+    mov es, ax
+    pop eax
+    mov ds, ax
 
     popa            ; restore all purpose registers
     add esp, 8      ; 清除推入的 err_code 以及 int_no

@@ -1,6 +1,7 @@
 #include "keyboard.h"
 #include "../cpu/ports.h"
 #include "../cpu/isr.h"
+#include "../cpu/task.h"
 #include "screen.h"
 #include "../libc/string.h"
 #include "../libc/function.h"
@@ -31,7 +32,57 @@ static int cursor_position = 0; // 光標在 key_buffer 中的位置
 static int shift_active = 0; // 標記 Shift 鍵是否被按下
 
 volatile int kbd_line_ready = 0;
-char kbd_line_buffer[256] = "";
+static char kbd_line_buffer[256] = "";
+static pcb_t *line_waiter;
+#ifdef SCHED_TEST
+extern volatile int scheduling_hold_before_block;
+extern pcb_t *scheduling_exit_reader;
+extern volatile unsigned scheduling_enter_count;
+#endif
+
+int keyboard_read_line(char *buffer, uint32_t capacity) {
+    if (!buffer || !capacity) return -1;
+    uint32_t flags;
+    asm volatile("pushf; pop %0; cli" : "=r"(flags) :: "memory");
+    pcb_t *self = task_current();
+    if (line_waiter && line_waiter != self) {
+        asm volatile("push %0; popf" :: "r"(flags) : "memory", "cc");
+        return -16;
+    }
+    keyboard_prepare_input_line();
+    while (!kbd_line_ready) {
+        line_waiter = self;
+#ifdef SCHED_TEST
+        if (scheduling_hold_before_block) {
+            scheduling_hold_before_block = 0;
+            kprint("SCHED IRQ PENDING WINDOW\n");
+            while (!(port_byte_in(0x64) & 1)) asm volatile("" ::: "memory");
+        }
+#endif
+        task_block_current();
+#ifdef SCHED_TEST
+        if (self == scheduling_exit_reader) task_exit();
+#endif
+    }
+    uint32_t count = 0;
+    while (count + 1 < capacity && kbd_line_buffer[count]) {
+        buffer[count] = kbd_line_buffer[count];
+        count++;
+    }
+    buffer[count] = 0;
+    kbd_line_ready = 0;
+    kbd_line_buffer[0] = 0;
+    line_waiter = 0;
+    asm volatile("push %0; popf" :: "r"(flags) : "memory", "cc");
+    return (int)count;
+}
+
+void keyboard_cancel_waiter(pcb_t *task) {
+    uint32_t flags;
+    asm volatile("pushf; pop %0; cli" : "=r"(flags) :: "memory");
+    if (line_waiter == task) line_waiter = 0;
+    asm volatile("push %0; popf" :: "r"(flags) : "memory", "cc");
+}
 
 // 可用命令列表（用於 Tab 自動補全）
 static const char* available_commands[] = {
@@ -528,14 +579,20 @@ static void keyboard_callback(registers_t *regs){
             add_to_history(key_buffer);
         }
         
-        // 複製到全域 buffer 給 Syscall (SYS_READ) 讀取
-        int i=0;
-        while(key_buffer[i] != '\0' && i < 255){
-            kbd_line_buffer[i] = key_buffer[i];
-            i++;
+        // Keep the older completed line when the one-slot buffer is full.
+        if (!kbd_line_ready) {
+            int i = 0;
+            while (key_buffer[i] != '\0' && i < 255) {
+                kbd_line_buffer[i] = key_buffer[i];
+                i++;
+            }
+            kbd_line_buffer[i] = '\0';
+            kbd_line_ready = 1;
+            task_wake(line_waiter);
         }
-        kbd_line_buffer[i] = '\0';
-        kbd_line_ready = 1;
+#ifdef SCHED_TEST
+        scheduling_enter_count++;
+#endif
 
         key_buffer[0]='\0';
         current_input[0]='\0'; // 清除當前輸入緩存

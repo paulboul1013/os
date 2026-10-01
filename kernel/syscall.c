@@ -54,27 +54,16 @@ void syscall_handler(registers_t *r) {
                 r->eax = USER_EFAULT;
                 break;
             }
-            keyboard_prepare_input_line();
-            scheduler_disable();
-            while (!kbd_line_ready) asm volatile("sti; hlt; cli");
-            scheduler_enable();
-            uint32_t i = 0;
-            while (i + 1 < len && kbd_line_buffer[i]) i++;
-            /* Copy only available bytes and a terminator, after full validation. */
             char text[256];
-            for (uint32_t j = 0; j < i; j++) text[j] = kbd_line_buffer[j];
-            text[i] = 0;
-            int error = copy_to_user((void*)r->ebx, text, i + 1);
-            kbd_line_ready = 0;
-            kbd_line_buffer[0] = 0;
-            r->eax = error ? (uint32_t)error : i;
+            int count = keyboard_read_line(text, len < sizeof(text) ? len : sizeof(text));
+            if (count < 0) { r->eax = (uint32_t)count; break; }
+            int error = copy_to_user((void*)r->ebx, text, count + 1);
+            r->eax = error ? (uint32_t)error : (uint32_t)count;
             break;
         }
         case SYS_GETPID: r->eax = task_current()->pid; break;
         case SYS_SLEEP:
-            sleep(r->ebx);
-            asm volatile("cli" ::: "memory");
-            r->eax = 0;
+            r->eax = (uint32_t)sleep(r->ebx);
             break;
         case SYS_CLEAR: clear_screen(); r->eax = 0; break;
         case SYS_YIELD: task_yield(); r->eax = 0; break;

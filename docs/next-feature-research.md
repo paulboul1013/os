@@ -1,8 +1,10 @@
 # 下一個功能：讓 Ring 3 shell 具備真正的記憶體保護
 
+> 此頁保留保護階段開始前的研究基線；目前的保護與排程狀態見[保護設計](user-protection.md)及[阻塞／搶佔實作](blocking-wakeup-preemption-plan.md)。
+
 研究日期：2026-09-30。以下保留研究當時的原始碼觀察與計畫基線。
 
-實作更新：第一個里程碑已實作；頁權限、syscall 複製、user stack／SSP、IDT 入口及故障回收的設計與自動測試見[保護設計與驗證](user-protection.md)。不同 user 任務之間的隔離與阻塞／喚醒仍屬後續範圍。
+實作更新：保護與排程里程碑已實作；頁權限、syscall 複製、user stack／SSP、IDT 入口及故障回收見[保護設計與驗證](user-protection.md)，阻塞／喚醒、Ring 3 搶佔與睡眠見[排程實作與驗收](blocking-wakeup-preemption-plan.md)。不同 user 任務之間的隔離仍屬後續範圍。
 
 ## 建議與理由
 

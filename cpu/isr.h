@@ -78,12 +78,13 @@ extern void irq15();
 //pushed by the processor automatically
 // push byte's on the isr-specific code: error code , then int number
 // all the registers by pusha
-// push eax whose lower 16-bits contain DS
+// push DS. The stubs save ES/FS/GS privately below DS and pass a pointer to DS.
 typedef struct {
-    uint32_t ds;//date segment selector
+    uint32_t ds; // data segment selector
     uint32_t edi,esi,ebp,useless,ebx,edx,ecx,eax; //pushed by pusha
     uint32_t int_no, err_code; //interrupt number and error code(if applicable)
-    uint32_t eip,cs,eflags,esp,ss; //pushed by the processor automatically
+    uint32_t eip,cs,eflags; // always pushed by the processor
+    uint32_t esp,ss; // valid only when the CPU crossed privilege levels (CS & 3)
 } registers_t;
 
 void isr_install();

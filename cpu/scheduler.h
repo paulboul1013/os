@@ -16,9 +16,8 @@ pcb_t* scheduler_current(void);
 // Perform scheduling (called from timer IRQ or voluntarily)
 void schedule(void);
 
-// Enable/disable preemptive scheduling
+// Open the scheduler after boot initialization
 void scheduler_enable(void);
-void scheduler_disable(void);
 
 // Timer interrupt handler for preemptive scheduling
 void scheduler_timer_handler(registers_t *regs);

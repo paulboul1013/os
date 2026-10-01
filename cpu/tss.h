@@ -26,7 +26,7 @@ typedef struct {
 // Initialize TSS with kernel stack info
 void tss_init(uint32_t kernel_ss, uint32_t kernel_esp);
 
-// Update TSS esp0 (called on task switch for user mode, future use)
+// Update TSS esp0 on every task switch, before the next privilege transition
 void tss_set_kernel_stack(uint32_t esp);
 
 // Load TSS selector into Task Register (assembly)

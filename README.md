@@ -24,13 +24,13 @@
 | 開機 | BIOS、軟碟 CHS 讀取、自製 GDT、32-bit protected mode | [boot/bootsect.asm](boot/bootsect.asm) |
 | 中斷／裝置 | IDT、PIC、50 Hz PIT、鍵盤 IRQ、VGA 文字輸出 | [cpu/isr.c](cpu/isr.c)、[drivers/](drivers/) |
 | 記憶體 | bitmap PMM、核心 heap、前 8 MiB identity mapping、核心／user 頁權限 | [cpu/pmm.c](cpu/pmm.c)、[cpu/paging.c](cpu/paging.c)、[libc/mem.c](libc/mem.c) |
-| 任務 | PCB、Round-Robin、以 ESP 切換核心堆疊 | [cpu/scheduler.c](cpu/scheduler.c)、[cpu/context_switch.asm](cpu/context_switch.asm) |
+| 任務 | PCB、Round-Robin、阻塞／喚醒、Ring 3 timer 搶佔 | [cpu/scheduler.c](cpu/scheduler.c)、[cpu/context_switch.asm](cpu/context_switch.asm) |
 | 使用者模式 | GDT user segments、TSS、獨立 user stack、故障隔離 | [cpu/usermode.c](cpu/usermode.c) |
 | 系統呼叫 | `int 0x80`，編號 0–11 | [kernel/syscall.c](kernel/syscall.c) |
 | Shell | `help clear pid echo ls touch cat write rm exit`，另有 `?` | [user/shell.c](user/shell.c) |
 | 檔案 | SimpleFS，64 個檔案，每檔最多 4096 bytes；重開機消失 | [fs/fs.c](fs/fs.c) |
 
-**目前的保護界線：** 核心頁面與頁表為 supervisor，user text／rodata 唯讀，syscall 透過檢查與複製存取 user buffer；user fault 會結束該任務並延後回收 stack。所有任務仍共用頁目錄，**不同 user 任務之間尚未隔離**；timer 遇到 Ring 3 時不切換，`SYS_READ` 等輸入時仍停用全域排程器。詳見[保護設計與驗證](docs/user-protection.md)及[實作界線](docs/concepts.md#實作界線與後續閱讀題目)。
+**目前的保護界線：** 核心頁面與頁表為 supervisor，user text／rodata 唯讀，syscall 透過檢查與複製存取 user buffer；user fault 會結束該任務並延後回收 stack。所有任務仍共用頁目錄，**不同 user 任務之間尚未隔離**。shell 等鍵盤時只阻塞自己，timer 可搶佔 Ring 3 task，`SYS_SLEEP` 到期由 timer 喚醒。詳見[保護設計與驗證](docs/user-protection.md)及[排程實作計畫與驗收](docs/blocking-wakeup-preemption-plan.md)。
 
 ## 建置與執行
 
@@ -50,7 +50,7 @@ make run CC=i386-elf-gcc LD=i386-elf-ld OBJCOPY=i386-elf-objcopy
 
 `make run` 預設使用 GTK/X11 與 PulseAudio。環境不適合時，見[不含音效的啟動方式與 GDB](docs/practice.md)。
 
-可執行 `make test` 驗證 linker 配置、QEMU 保護測試、shell 鍵盤流程與核心 panic。測試需求與涵蓋範圍見[驗證說明](docs/user-protection.md#自動驗證)。
+可執行 `make test` 驗證 linker 配置、QEMU 保護與排程測試、shell 鍵盤流程與核心 panic。測試需求與涵蓋範圍見[驗證說明](docs/user-protection.md#自動驗證)。
 
 ## 文檔依據
 

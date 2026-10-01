@@ -43,10 +43,6 @@ void scheduler_enable(void) {
     scheduler_enabled = 1;
 }
 
-void scheduler_disable(void) {
-    scheduler_enabled = 0;
-}
-
 // Round-robin scheduler
 void schedule(void) {
     uint32_t flags;
@@ -107,6 +103,10 @@ void schedule(void) {
     if (next_task->kernel_stack_top != 0) {
         tss_set_kernel_stack(next_task->kernel_stack_top);
     }
+#ifdef SCHED_TEST
+    extern void scheduling_switch_observed(pcb_t*, pcb_t*);
+    scheduling_switch_observed(old_task, next_task);
+#endif
 
     // Perform context switch
     context_switch(&old_task->esp, next_task->esp);
@@ -117,8 +117,13 @@ done:
 
 // Timer interrupt handler for preemptive scheduling
 void scheduler_timer_handler(registers_t *regs) {
-    if (regs && (regs->cs & 0x3) != 0) {
-        return;
-    }
+    /* IRQ stub keeps the complete frame on this task's kernel stack. Ring 3
+     * frames also contain SS:ESP; iret consumes those only on privilege exit. */
+#ifdef SCHED_TEST
+    extern void scheduling_timer_observed(registers_t*);
+    scheduling_timer_observed(regs);
+#else
+    (void)regs;
+#endif
     schedule();
 }

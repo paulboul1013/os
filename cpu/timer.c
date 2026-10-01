@@ -2,6 +2,7 @@
 #include "isr.h"
 #include "ports.h"
 #include "scheduler.h"
+#include "task.h"
 #include "../libc/function.h"
 
 volatile uint32_t tick = 0;
@@ -9,6 +10,7 @@ volatile uint32_t timer_freq = 0;
 
 static void timer_callback(registers_t *regs){
     tick++;
+    task_wake_due(tick);
 
     // Call scheduler for preemptive multitasking
     scheduler_timer_handler(regs);
@@ -30,19 +32,25 @@ void init_timer(uint32_t freq) {
     port_byte_out(0x40,high);
 }
 
-void sleep(uint32_t seconds) {
-    sleep_ms(seconds * 1000);
+int sleep(uint32_t seconds) {
+    if (!seconds) return 0;
+    if (!timer_freq || seconds > 0x7fffffff / timer_freq) return -1;
+    task_sleep_ticks(seconds * timer_freq);
+    return 0;
 }
 
-void sleep_ms(uint32_t ms) {
-    uint32_t ticks_to_wait = (ms * timer_freq) / 1000;
-    if (ticks_to_wait == 0 && ms > 0) ticks_to_wait = 1;
-    
-    uint32_t target_tick = tick + ticks_to_wait;
-    asm volatile("sti");
-    while (tick < target_tick) {
-        asm volatile("hlt");
-    }
+int sleep_ms(uint32_t ms) {
+    if (!ms) return 0;
+    if (!timer_freq) return -1;
+    uint32_t whole = ms / 1000, remainder = ms % 1000;
+    if (whole > 0x7fffffff / timer_freq ||
+        (remainder && timer_freq > (0xffffffffu - 999) / remainder)) return -1;
+    uint32_t fraction = (remainder * timer_freq + 999) / 1000;
+    uint32_t ticks = whole * timer_freq;
+    if (ticks > 0x7fffffff - fraction) return -1;
+    ticks += fraction;
+    task_sleep_ticks(ticks);
+    return 0;
 }
 
 // Play sound using PIT Channel 2
@@ -68,4 +76,3 @@ void nosound() {
     uint8_t tmp = port_byte_in(0x61) & 0xFC;
     port_byte_out(0x61, tmp);
 }
-

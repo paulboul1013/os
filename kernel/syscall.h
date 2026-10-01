@@ -17,6 +17,8 @@
 #define SYS_FS_WRITE  10
 #define SYS_FS_DELETE 11
 
+#define SYS_EBUSY (-16)
+
 // mount int 0x80
 void syscall_init(void);
 

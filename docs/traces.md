@@ -10,13 +10,17 @@
 sequenceDiagram
     participant S as Ring 3 shell
     participant K as syscall handler
+    participant Q as scheduler
+    participant B as background task
     participant D as keyboard IRQ
     participant V as VGA driver
     S->>K: SYS_READ(buf, 256)
-    Note over K: 停用 scheduler，開中斷並 hlt 等一行
+    K->>Q: 登記讀者；RUNNING → BLOCKED
+    Q->>B: 切換；背景工作繼續
     D->>D: scancode → key_buffer → Enter
-    D->>K: kbd_line_buffer / kbd_line_ready
-    K-->>S: 複製字串，EAX = 長度，iret
+    D->>Q: 發布完整行；BLOCKED → READY
+    Q->>K: 日後恢復 shell 的核心 stack
+    K-->>S: 重新驗證並複製，EAX = 長度，iret
     S->>S: 比對 echo 前綴
     S->>K: SYS_WRITE("hello")
     K->>V: kprint
@@ -25,9 +29,9 @@ sequenceDiagram
 
 1. [user/shell.c](../user/shell.c) 的 `sys_read` 設定 EAX=2、EBX=buffer、ECX=長度，執行 `int 0x80`。
 2. CPU 經 IDT 進核心，跨權限時使用 TSS 的核心 stack。[cpu/syscall.asm](../cpu/syscall.asm) 保存暫存器，把 frame 指標交給 `syscall_handler`。
-3. [kernel/syscall.c](../kernel/syscall.c) 的 `SYS_READ` 先檢查整個輸出範圍可寫，再等待 `kbd_line_ready`。開中斷讓 IRQ 能進來，`hlt` 暫停 CPU 直到事件發生。
-4. [drivers/keyboard.c](../drivers/keyboard.c) 的 callback 處理輸入；Enter 把 `key_buffer` 複製到 `kbd_line_buffer` 並設定 ready。
-5. handler 透過核心暫存區與 `copy_to_user` 複製到 user buffer，設定 `r->eax` 為長度。stub 的 `popa` 恢復這個修改過的 EAX，`iret` 返回 shell。
+3. [kernel/syscall.c](../kernel/syscall.c) 的 `SYS_READ` 先檢查整個輸出範圍可寫。[drivers/keyboard.c](../drivers/keyboard.c) 在關 IRQ 的區段檢查完整行；沒有資料時登記讀者並阻塞 shell。其他 READY task 和 idle 仍可執行。
+4. 鍵盤 IRQ 的 callback 處理輸入；Enter 將 `key_buffer` 複製到單槽 buffer，設定 ready，再將等待者改為 READY。槽已滿時不覆寫較早的一行。
+5. shell 再次被選中時，`keyboard_read_line` 取出一行；handler 透過核心暫存區與 `copy_to_user` 重新檢查並複製到 user buffer，設定 `r->eax` 為長度。stub 的 `popa` 恢復這個修改過的 EAX，`iret` 返回 shell。
 6. shell 比對 `echo `，將後面的字串經 `SYS_WRITE` 有界複製到核心後交給 `kprint`；[drivers/screen.c](../drivers/screen.c) 寫 VGA。
 
 鍵盤驅動處理的是輸入編輯，shell 才負責命令語意。history 和 Tab 在 driver，這也解釋了為什麼補全清單可能落後於 shell 命令。
@@ -60,7 +64,7 @@ cat note
 PIT IRQ0（設定為 50 Hz）
   → cpu/interrupt.asm：irq0 → irq_common_stub
   → cpu/isr.c：irq_handler（先送 EOI）
-  → cpu/timer.c：timer_callback（tick++）
+  → cpu/timer.c：timer_callback（tick++，喚醒到期的睡眠 task）
   → cpu/scheduler.c：scheduler_timer_handler → schedule
   → 更新任務狀態、current_task、TSS.esp0
   → cpu/context_switch.asm：保存舊 ESP，載入新 ESP，ret
@@ -70,7 +74,9 @@ PIT IRQ0（設定為 50 Hz）
   → iret → user_shell_main
 ```
 
-可從 [scheduler.c](../cpu/scheduler.c) 開始逆向追。此路線起點是 Ring 0 的 idle，因此通過 `regs->cs` 檢查；若 timer 中斷的是 Ring 3，該 handler 會直接返回，不會執行這次切換。
+可從 [scheduler.c](../cpu/scheduler.c) 開始逆向追。此路線起點是 Ring 0 的 idle。timer 中斷 Ring 3 時也能切換：CPU 先以 TSS `esp0` 進入該 task 的核心 stack，IRQ stub 保存暫存器；`schedule()` 更新下一個 task 的 TSS `esp0`，再由 `context_switch` 保存目前 stack 的 ESP 並載入下一 task 的 ESP。日後恢復前一 task 時，原本的 IRQ stub 會從它自己的 frame 還原暫存器，再由 `iret` 還原 user EIP、CS、EFLAGS、ESP、SS。Ring 0 的 IRQ frame 沒有 user ESP／SS，排程器不讀取那兩欄。
+
+`SYS_SLEEP` 以秒數換成最多 `2^31-1` 個 tick，記錄 deadline 並阻塞目前 task；IRQ0 每 tick 掃描 PCB，使用回繞安全的差值判斷期限，喚醒到期 task。零秒立即返回，過大的秒數回傳 `-1`。
 
 ## Syscall 速查
 
@@ -80,8 +86,8 @@ PIT IRQ0（設定為 50 Hz）
 |---|---|---|---|
 | 0 | EXIT | code / — / — | 結束任務；code 目前未使用 |
 | 1 | WRITE | NUL 字串 / — / — | 畫面輸出，成功回 0 |
-| 2 | READ | buffer / 容量 / — | 讀一行，回傳字串長度 |
-| 3 | SLEEP | 秒數 / — / — | timer 等待；shell 無此命令 |
+| 2 | READ | buffer / 容量 / — | 讀一行；第二位讀者回 `-16` |
+| 3 | SLEEP | 秒數 / — / — | 只阻塞呼叫者，到期回 0；秒數過大回 `-1` |
 | 4 | GETPID | — | 取得任務 PID |
 | 5 | CLEAR | — | 清畫面 |
 | 6 | YIELD | — | 主動呼叫 schedule；shell 無此命令 |

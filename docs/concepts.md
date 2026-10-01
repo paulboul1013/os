@@ -63,7 +63,17 @@ ESP → EFLAGS → EDI → ESI → EBX → EBP → task_start／返回位址
 
 `context_switch(&old->esp, next->esp)` 保存舊 ESP、載入新 ESP，pop 暫存器後 `ret`。新任務第一次 `ret` 跳到 `task_start`，回收已終止任務後開啟中斷，再呼叫 entry；entry 返回會自動 `task_exit`；舊任務恢復時則返回先前呼叫位置。中斷途徑另外由 IRQ stub 保存其他暫存器。
 
-Round-Robin 沿串列找下一個 READY 任務，到尾端回到 head。共有 32 個 PCB slot，task 0 是原本的核心執行。`TASK_BLOCKED` 已定義，但沒有完整等待／喚醒機制。
+Round-Robin 沿串列找下一個 READY 任務，到尾端回到 head。共有 32 個 PCB slot，task 0 是永不阻塞的 idle。`task_block_current` 讓目前 task 從 RUNNING 進入 BLOCKED，`task_wake` 使它回到 READY；鍵盤完成一行與睡眠期限到達都使用這條路徑。timer 中斷可在 Ring 3 frame 上切換；返回時沿各自核心 stack 的 IRQ frame 執行 `iret`。
+
+```mermaid
+stateDiagram-v2
+    READY --> RUNNING: schedule 選中
+    RUNNING --> READY: yield 或 timer 切換
+    RUNNING --> BLOCKED: 等輸入或睡眠
+    BLOCKED --> READY: Enter 或期限到達
+    RUNNING --> TERMINATED: exit 或 user fault
+    TERMINATED --> [*]: 換 stack 後回收
+```
 
 **自問：** 為何這裡的任務不像各有獨立位址空間的行程？PCB 沒有每任務頁目錄，context switch 也沒有替任務切 CR3。
 
@@ -88,7 +98,7 @@ syscall 約定：EAX 是編號與回傳值，EBX／ECX／EDX 帶參數。這是�
 
 ## 6. I/O 與檔案：裝置資料怎麼成為程式可用的內容？
 
-[keyboard_callback](../drivers/keyboard.c) 從 port `0x60` 讀 scancode，處理字元、游標、history，Enter 後將一行放進共享 buffer。`SYS_READ` 把完成的一行複製到 shell。輸出則由 [screen.c](../drivers/screen.c) 寫入 VGA 文字記憶體。
+[keyboard_callback](../drivers/keyboard.c) 從 port `0x60` 讀 scancode，處理字元、游標、history，Enter 後將一行放進單槽 buffer 並喚醒等待者。`SYS_READ` 在無完整行時只阻塞呼叫 task，醒後以 `copy_to_user` 再次驗證 user buffer。輸出則由 [screen.c](../drivers/screen.c) 寫入 VGA 文字記憶體。
 
 [SimpleFS](../fs/fs.c) 用 `file_table[64]` 保存每個檔案的名稱、最多 4096 bytes 資料、大小與使用旗標。名稱最多 31 bytes，另外保留 NUL。查找是線性掃描；write 覆蓋整個內容，read 從開頭讀到 buffer 上限。
 
@@ -104,8 +114,8 @@ syscall 約定：EAX 是編號與回傳值，EBX／ECX／EDX 帶參數。這是�
 |---|---|
 | user 任務共用頁目錄 | user data 與所有存活 user stack 對各 user 任務可見；沒有 per-process 隔離 |
 | 沒有 NX 保護 | 使用傳統 32-bit paging，user 可寫頁仍可執行；text／rodata 以 RW=0 保護 |
-| 使用者程式不受 timer 直接搶佔 | `scheduler_timer_handler` 遇到 `regs->cs & 3 != 0` 就返回 |
-| 讀取輸入停用全域排程 | `SYS_READ` 以 `scheduler_disable` 與 `sti; hlt; cli` 等待，尚無每任務等待佇列 |
+| console 僅支援一位讀者與一個待取行 | 第二位讀者收到 `-16`；槽滿時保留較早的完整行，捨棄新行 |
+| 排程器只有單 CPU Round-Robin | 沒有優先權、一般化 wait queue 或多 CPU 同步；睡眠 deadline 掃描至多 32 個 PCB |
 | heap 的 align 參數未真正完成 | `kmalloc` 計算 padding，但沒有調整回傳位置；kernel stack 不要求頁對齊，user stack 改用 PMM 完整頁 |
 | PMM 未解析硬體 memory map | 假設 128 MiB RAM；目前僅映射前 8 MiB，user stack 與頁表配置會檢查此範圍 |
 | Tab 命令表與 shell 不一致 | `available_commands` 還有 `end/page/calc/time`；以 `user_shell_main` 解析分支為現況 |

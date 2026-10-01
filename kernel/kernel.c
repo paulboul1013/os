@@ -23,7 +23,7 @@ __attribute__((constructor)) void test_constructor() {
 extern uintptr_t __stack_chk_guard;
 
 extern void user_shell_main(void);
-#ifndef PROTECTION_TEST
+#if !defined(PROTECTION_TEST) && !defined(SCHED_TEST)
 static void shell_init_wrapper(void) { lauch_user_task(user_shell_main); }
 #endif
 
@@ -75,6 +75,9 @@ void kernel_main(){
 #ifdef PROTECTION_TEST
     extern void protection_tests(void);
     task_create(protection_tests);
+#elif defined(SCHED_TEST)
+    extern void scheduling_tests(void);
+    task_create(scheduling_tests);
 #else
     task_create(shell_init_wrapper);
 #endif

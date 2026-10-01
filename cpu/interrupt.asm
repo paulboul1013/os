@@ -6,14 +6,22 @@
 isr_common_stub:
     ;1. save cpu state 
     pusha; push edi,esi,ebp,esp,ebx,edx,ecx,eax
-    mov ax, ds; lower 16-bits of eax = ds
-    push eax ;save the data segment descriptor
+    xor eax, eax
+    mov ax, ds
+    push eax ; registers_t starts here; other selectors are private stub saves
+    mov ax, es
+    push eax
+    mov ax, fs
+    push eax
+    mov ax, gs
+    push eax
     mov ax, 0x10 ; kernel data segment descriptor (Fixed: was 10 decimal)
     mov ds,ax
     mov es,ax
     mov fs,ax
     mov gs,ax
-    push esp ;register_t *r
+    lea eax, [esp + 12] ; skip private GS/FS/ES saves to registers_t.ds
+    push eax
 
 
     ;2. call c handler
@@ -21,22 +29,32 @@ isr_common_stub:
     call isr_handler
 
     ;3.restore state
-    pop eax ; pops the esp pointer (not used)
-    pop eax ; pops the original ds
-    mov ds,ax 
-    mov es,ax
-    mov fs,ax
-    mov gs,ax
+    add esp, 4 ; discard registers_t argument
+    pop eax
+    mov gs, ax
+    pop eax
+    mov fs, ax
+    pop eax
+    mov es, ax
+    pop eax
+    mov ds, ax
     popa
     add esp,8 ; cleanup up the pushed error code and pushed ISR number
-    iret; pop 5 things at once: CS ,EIP,EFLAGS ,SS , and ESP
+    iret ; EIP/CS/EFLAGS; also ESP/SS when returning across privilege levels
 
 
 
-;Common IRQ code。identical to ISR code except for the call and the pop ebx
+; Common IRQ code, with the same frame and selector saves as the ISR path
 irq_common_stub:
     pusha
+    xor eax, eax
     mov ax, ds
+    push eax
+    mov ax, es
+    push eax
+    mov ax, fs
+    push eax
+    mov ax, gs
     push eax
     mov ax, 0x10
     mov ds, ax
@@ -44,17 +62,20 @@ irq_common_stub:
     mov fs, ax
     mov gs, ax
 
-    push esp ;register_t *r
+    lea eax, [esp + 12]
+    push eax ; registers_t *r, starting at DS
     cld
     call irq_handler ; Different than the ISR code
 
-    pop eax ; pop esp (not used)
-
-    pop ebx  ; Different than the ISR code
-    mov ds, bx
-    mov es, bx
-    mov fs, bx
-    mov gs, bx
+    add esp, 4
+    pop eax
+    mov gs, ax
+    pop eax
+    mov fs, ax
+    pop eax
+    mov es, ax
+    pop eax
+    mov ds, ax
     popa
     add esp, 8
     iret 

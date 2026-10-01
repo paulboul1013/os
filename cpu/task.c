@@ -4,9 +4,11 @@
 #include "pmm.h"
 #include "../libc/mem.h"
 #include "../drivers/screen.h"
+#include "../drivers/keyboard.h"
 
 static pcb_t task_pool[MAX_TASKS];
 static uint32_t next_pid = 1;
+extern volatile uint32_t tick;
 
 void task_init(void) {
     // Clear task pool
@@ -113,8 +115,9 @@ void task_exit(void) {
     asm volatile("cli" ::: "memory");
     pcb_t *current = scheduler_current();
     if (current && current->pid) {
+        keyboard_cancel_waiter(current);
+        current->sleeping = 0;
         current->state = TASK_TERMINATED;
-        scheduler_enable();
         schedule();
     }
     for (;;) asm volatile("cli; hlt");
@@ -126,4 +129,49 @@ pcb_t* task_current(void) {
 
 void task_yield(void) {
     schedule();
+}
+
+void task_block_current(void) {
+    uint32_t flags;
+    asm volatile("pushf; pop %0; cli" : "=r"(flags) :: "memory");
+    pcb_t *current = task_current();
+    if (current && current->pid && current->state == TASK_RUNNING) {
+        current->state = TASK_BLOCKED;
+        schedule();
+    }
+    asm volatile("push %0; popf" :: "r"(flags) : "memory", "cc");
+}
+
+void task_wake(pcb_t *task) {
+    uint32_t flags;
+    asm volatile("pushf; pop %0; cli" : "=r"(flags) :: "memory");
+    if (task && task->pid && task->state == TASK_BLOCKED) {
+        task->sleeping = 0;
+        task->state = TASK_READY;
+    }
+    asm volatile("push %0; popf" :: "r"(flags) : "memory", "cc");
+}
+
+void task_sleep_ticks(uint32_t ticks) {
+    if (!ticks) return;
+    uint32_t flags;
+    asm volatile("pushf; pop %0; cli" : "=r"(flags) :: "memory");
+    pcb_t *current = task_current();
+    if (current && current->pid) {
+        current->wake_tick = tick + ticks;
+        current->sleeping = 1;
+        task_block_current();
+    }
+    asm volatile("push %0; popf" :: "r"(flags) : "memory", "cc");
+}
+
+void task_wake_due(uint32_t now) {
+    uint32_t flags;
+    asm volatile("pushf; pop %0; cli" : "=r"(flags) :: "memory");
+    for (int i = 1; i < MAX_TASKS; i++) {
+        pcb_t *task = &task_pool[i];
+        if (task->sleeping && task->state == TASK_BLOCKED &&
+            (int32_t)(now - task->wake_tick) >= 0) task_wake(task);
+    }
+    asm volatile("push %0; popf" :: "r"(flags) : "memory", "cc");
 }
